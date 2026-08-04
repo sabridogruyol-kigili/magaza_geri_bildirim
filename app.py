@@ -6,7 +6,7 @@ from io import BytesIO
 
 # ==================== AYARLAR ====================
 # Apps Script'i "Web Uygulaması" olarak yayınladıktan sonra aldığınız URL'yi buraya yapıştırın
-APPS_SCRIPT_URL = "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzOI0kAiy2CJixUf5ElBKA8O6NSijRb19pBw_uo4k9bB_mfQyEEXO7Xszb-1Pr90g5c/exec"
 
 UNVAN_LISTESI = [
     "Mağaza Müdür Yardımcısı", "Satış Şefi", "Satış Danışmanı",

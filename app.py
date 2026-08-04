@@ -103,6 +103,10 @@ if "kullanici_adi" not in st.session_state:
     st.session_state.kullanici_adi = None
 if "ad_soyad" not in st.session_state:
     st.session_state.ad_soyad = None
+if "bolge" not in st.session_state:
+    st.session_state.bolge = None
+if "magaza" not in st.session_state:
+    st.session_state.magaza = None
 
 
 # ==================== SIDEBAR ====================
@@ -133,12 +137,19 @@ def sidebar_ciz():
                     st.session_state.view = view_key
                     st.rerun()
         else:
-            baslik = f"👤 {st.session_state.ad_soyad}" if st.session_state.giris_tipi == "kullanici" else "🔑 Yönetici Paneli"
-            st.markdown(f"**{baslik}**")
+            if st.session_state.giris_tipi == "kullanici":
+                baslik = f"👤 {st.session_state.ad_soyad}"
+                st.markdown(f"**{baslik}**")
+                if st.session_state.magaza:
+                    st.caption(f"📍 {st.session_state.magaza}" + (f" — {st.session_state.bolge}" if st.session_state.bolge else ""))
+            else:
+                st.markdown("**🔑 Yönetici Paneli**")
             if st.button("🔒 Çıkış Yap", use_container_width=True):
                 st.session_state.giris_tipi = None
                 st.session_state.kullanici_adi = None
                 st.session_state.ad_soyad = None
+                st.session_state.bolge = None
+                st.session_state.magaza = None
                 st.session_state.view = "home"
                 st.rerun()
 
@@ -235,6 +246,8 @@ def kullanici_giris_ekrani():
                 st.session_state.giris_tipi = "kullanici"
                 st.session_state.kullanici_adi = ka
                 st.session_state.ad_soyad = sonuc.get("ad_soyad")
+                st.session_state.bolge = sonuc.get("bolge")
+                st.session_state.magaza = sonuc.get("magaza")
                 st.rerun()
             else:
                 st.error(sonuc.get("error", "Giriş başarısız."))
@@ -261,13 +274,27 @@ def yonetici_giris_ekrani():
 
 
 # ==================== KULLANICI PANELİ ====================
-def kullanici_paneli():
+def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None, onizleme=False, key_prefix=""):
+    ka = kullanici_adi if kullanici_adi is not None else st.session_state.kullanici_adi
+    ads = ad_soyad if ad_soyad is not None else st.session_state.ad_soyad
+    bl = bolge if bolge is not None else st.session_state.bolge
+    mg = magaza if magaza is not None else st.session_state.magaza
+
+    if onizleme:
+        st.info("🧪 **Önizleme modu** — bu ekran kullanıcıların göreceği ekranın birebir aynısıdır. Buradan yapılan kayıtlar/güncellemeler sisteme gerçekten kaydedilir.", icon="🧪")
+
+    bolge_magaza_satiri = ""
+    if bl or mg:
+        parcalar = [p for p in [bl, mg] if p]
+        bolge_magaza_satiri = f'<div style="font-size:12px;opacity:0.7;margin-top:2px;">📍 {" — ".join(parcalar)}</div>'
+
     st.markdown(f"""
         <div style="background:linear-gradient(135deg,#7A2331 0%,#591722 100%);border-radius:14px;
                     padding:20px 26px;margin-bottom:20px;color:#fff;">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.15em;opacity:0.75;">Personel Değerlendirme Sistemi</div>
             <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;">Aylık Değerlendirme Formu</div>
-            <div style="font-size:13px;opacity:0.85;margin-top:4px;">Hoş geldiniz, {st.session_state.ad_soyad}</div>
+            <div style="font-size:13px;opacity:0.85;margin-top:4px;">Hoş geldiniz, {ads}</div>
+            {bolge_magaza_satiri}
         </div>
     """, unsafe_allow_html=True)
 
@@ -280,27 +307,27 @@ def kullanici_paneli():
         empty_state("🗓️", "Şu anda aktif bir değerlendirme dönemi bulunmuyor. Yönetici tarafından bir dönem açıldığında burada görünecektir.")
         return
 
-    donem = st.selectbox("Dönem Seçin", aktif_donemler, format_func=donem_etiket)
+    donem = st.selectbox("Dönem Seçin", aktif_donemler, format_func=donem_etiket, key=f"{key_prefix}donem_sec")
 
     # --- Beyan sayısı ---
-    beyan_res = api_cagir("get_declaration", kullanici_adi=st.session_state.kullanici_adi, donem=donem)
+    beyan_res = api_cagir("get_declaration", kullanici_adi=ka, donem=donem)
     mevcut_beyan = beyan_res.get("beyan_sayisi", 0)
 
     st.markdown('<span class="pill">1. ADIM</span>', unsafe_allow_html=True)
     st.markdown("##### Çalışan Sayınızı Girin")
     col1, col2 = st.columns([2, 1])
     with col1:
-        yeni_beyan = st.number_input("Bu dönem için toplam çalışan sayınız", min_value=0, value=int(mevcut_beyan), step=1)
+        yeni_beyan = st.number_input("Bu dönem için toplam çalışan sayınız", min_value=0, value=int(mevcut_beyan), step=1, key=f"{key_prefix}beyan_sayi")
     with col2:
         st.write("")
         st.write("")
-        if st.button("Kaydet / Güncelle", key="beyan_kaydet"):
-            api_cagir("save_declaration", kullanici_adi=st.session_state.kullanici_adi, donem=donem, beyan_sayisi=yeni_beyan)
+        if st.button("Kaydet / Güncelle", key=f"{key_prefix}beyan_kaydet"):
+            api_cagir("save_declaration", kullanici_adi=ka, donem=donem, beyan_sayisi=yeni_beyan)
             st.success("Çalışan sayısı kaydedildi.")
             st.rerun()
 
     # --- Mevcut kayıtlar ---
-    kayit_res = api_cagir("get_records", kullanici_adi=st.session_state.kullanici_adi, donem=donem)
+    kayit_res = api_cagir("get_records", kullanici_adi=ka, donem=donem)
     personeller = kayit_res.get("personeller", [])
 
     st.markdown('<span class="pill">2. ADIM</span>', unsafe_allow_html=True)
@@ -319,11 +346,11 @@ def kullanici_paneli():
         empty_state("❓", "Henüz soru tanımlanmamış. Yöneticinizle iletişime geçin.")
         return
 
-    mod = st.radio("İşlem", ["Yeni Personel Ekle", "Mevcut Personeli Düzenle"], horizontal=True)
+    mod = st.radio("İşlem", ["Yeni Personel Ekle", "Mevcut Personeli Düzenle"], horizontal=True, key=f"{key_prefix}mod_sec")
 
     if mod == "Mevcut Personeli Düzenle" and personeller:
         secilecekler = {f"{p['sicil_no']} - {p['personel_ad_soyad']}": p for p in personeller}
-        secim = st.selectbox("Personel Seçin", list(secilecekler.keys()))
+        secim = st.selectbox("Personel Seçin", list(secilecekler.keys()), key=f"{key_prefix}personel_sec")
         aktif_kayit = secilecekler[secim]
         sicil_no_deger = aktif_kayit["sicil_no"]
         ad_soyad_deger = aktif_kayit["personel_ad_soyad"]
@@ -335,12 +362,12 @@ def kullanici_paneli():
     else:
         sicil_no_deger, ad_soyad_deger, unvan_deger, onceki_cevaplar = "", "", UNVAN_LISTESI[0], {}
 
-    with st.form("personel_form"):
+    with st.form(f"{key_prefix}personel_form"):
         c1, c2, c3 = st.columns(3)
         with c1:
             sicil_no = st.text_input("Sicil Numarası", value=str(sicil_no_deger), disabled=(mod == "Mevcut Personeli Düzenle"))
         with c2:
-            ad_soyad = st.text_input("Ad Soyad", value=ad_soyad_deger)
+            ad_soyad_girdi = st.text_input("Ad Soyad", value=ad_soyad_deger)
         with c3:
             unvan = st.selectbox("Unvan", UNVAN_LISTESI, index=UNVAN_LISTESI.index(unvan_deger) if unvan_deger in UNVAN_LISTESI else 0)
 
@@ -349,29 +376,29 @@ def kullanici_paneli():
         for s in sorular:
             onceki_deger = onceki_cevaplar.get(str(s["soru_no"]), onceki_cevaplar.get(s["soru_no"], ""))
             if s["cevap_tipi"] == "metin":
-                cevap_girisleri[s["soru_no"]] = st.text_area(s["soru_metni"], value=str(onceki_deger) if onceki_deger else "", key=f"soru_{s['soru_no']}")
+                cevap_girisleri[s["soru_no"]] = st.text_area(s["soru_metni"], value=str(onceki_deger) if onceki_deger else "", key=f"{key_prefix}soru_{s['soru_no']}")
             elif s["cevap_tipi"] == "sayisal":
                 try:
                     varsayilan = float(onceki_deger) if onceki_deger else 0.0
                 except ValueError:
                     varsayilan = 0.0
-                cevap_girisleri[s["soru_no"]] = st.number_input(s["soru_metni"], value=varsayilan, key=f"soru_{s['soru_no']}")
+                cevap_girisleri[s["soru_no"]] = st.number_input(s["soru_metni"], value=varsayilan, key=f"{key_prefix}soru_{s['soru_no']}")
             elif s["cevap_tipi"] in ("secmeli", "skala"):
                 secenekler = [x.strip() for x in (s.get("secenekler") or "").split(",") if x.strip()]
                 idx = secenekler.index(onceki_deger) if onceki_deger in secenekler else 0
-                cevap_girisleri[s["soru_no"]] = st.selectbox(s["soru_metni"], secenekler, index=idx, key=f"soru_{s['soru_no']}")
+                cevap_girisleri[s["soru_no"]] = st.selectbox(s["soru_metni"], secenekler, index=idx, key=f"{key_prefix}soru_{s['soru_no']}")
             else:
-                cevap_girisleri[s["soru_no"]] = st.text_input(s["soru_metni"], value=str(onceki_deger), key=f"soru_{s['soru_no']}")
+                cevap_girisleri[s["soru_no"]] = st.text_input(s["soru_metni"], value=str(onceki_deger), key=f"{key_prefix}soru_{s['soru_no']}")
 
         gonder = st.form_submit_button("💾 Kaydet", use_container_width=True, type="primary")
 
     if gonder:
-        if not sicil_no or not ad_soyad:
+        if not sicil_no or not ad_soyad_girdi:
             st.warning("Sicil numarası ve ad soyad zorunludur.")
         else:
             cevaplar_payload = [{"soru_no": s["soru_no"], "soru_metni": s["soru_metni"], "cevap": cevap_girisleri[s["soru_no"]]} for s in sorular]
-            sonuc = api_cagir("save_record", kullanici_adi=st.session_state.kullanici_adi, donem=donem,
-                               sicil_no=sicil_no, personel_ad_soyad=ad_soyad, unvan=unvan, cevaplar=cevaplar_payload)
+            sonuc = api_cagir("save_record", kullanici_adi=ka, donem=donem,
+                               sicil_no=sicil_no, personel_ad_soyad=ad_soyad_girdi, unvan=unvan, cevaplar=cevaplar_payload)
             if sonuc.get("success"):
                 st.success("Kayıt başarıyla kaydedildi.")
                 st.rerun()
@@ -395,10 +422,100 @@ def yonetici_paneli():
         </div>
     """, unsafe_allow_html=True)
 
-    sekmeler = st.tabs(["📅 Dönemler", "❓ Sorular", "📊 Doldurma Durumu", "📥 Excel İndir", "🗂️ Loglar"])
+    sekmeler = st.tabs(["🧪 Test / Önizleme", "👥 Kullanıcı Ayarları", "📅 Dönemler", "❓ Sorular", "📊 Doldurma Durumu", "📥 Excel İndir", "🗂️ Loglar"])
+
+    # --- TEST / ÖNİZLEME ---
+    with sekmeler[0]:
+        st.markdown("##### Kullanıcı Ekranını Önizle")
+        st.caption("Kullanıcıların formu doldururken göreceği ekranın birebir aynısını burada görebilirsiniz.")
+
+        kaynak = st.radio("Kimin ekranını görmek istersiniz?",
+                           ["Kayıtlı bir kullanıcıyı seç", "Örnek/test kullanıcısı ile önizle"], horizontal=True)
+
+        if kaynak == "Kayıtlı bir kullanıcıyı seç":
+            kullanicilar_res = api_cagir("get_users")
+            kullanicilar = kullanicilar_res.get("kullanicilar", [])
+            if not kullanicilar:
+                empty_state("👥", "Henüz kullanıcı tanımlanmadı. Önce 'Kullanıcı Ayarları' sekmesinden ekleyin.")
+            else:
+                secilecekler = {f"{k['kullanici_adi']} — {k['magaza'] or 'Mağaza belirtilmemiş'}": k for k in kullanicilar}
+                secim = st.selectbox("Kullanıcı Seçin", list(secilecekler.keys()))
+                secili = secilecekler[secim]
+                st.divider()
+                kullanici_paneli(kullanici_adi=secili["kullanici_adi"], ad_soyad=secili["ad_soyad"],
+                                  bolge=secili["bolge"], magaza=secili["magaza"],
+                                  onizleme=True, key_prefix="onizleme_")
+        else:
+            st.divider()
+            kullanici_paneli(kullanici_adi="TEST_ONIZLEME", ad_soyad="Test Kullanıcısı",
+                              bolge="Test Bölge", magaza="Test Mağaza",
+                              onizleme=True, key_prefix="onizleme_")
+
+    # --- KULLANICI AYARLARI ---
+    with sekmeler[1]:
+        st.markdown("##### Kullanıcı Yönetimi")
+        st.caption("Her satır bir mağaza girişini temsil eder. Kullanıcı adı, şifre, bölge ve mağaza bilgisini buradan yönetin.")
+
+        kullanicilar_res = api_cagir("get_users")
+        kullanicilar = kullanicilar_res.get("kullanicilar", [])
+
+        with st.expander("➕ Yeni Kullanıcı Ekle", expanded=(len(kullanicilar) == 0)):
+            with st.form("yeni_kullanici_form", clear_on_submit=True):
+                c1, c2, c3, c4 = st.columns(4)
+                y_bolge = c1.text_input("Bölge")
+                y_magaza = c2.text_input("Mağaza")
+                y_kadi = c3.text_input("Kullanıcı Adı")
+                y_sifre = c4.text_input("Şifre")
+                ekle_kullanici = st.form_submit_button("Ekle", type="primary")
+            if ekle_kullanici:
+                if not y_kadi or not y_sifre:
+                    st.warning("Kullanıcı adı ve şifre zorunludur.")
+                else:
+                    sonuc = api_cagir("save_user", kullanici_adi=y_kadi, sifre=y_sifre,
+                                       ad_soyad=y_magaza or y_kadi, bolge=y_bolge, magaza=y_magaza)
+                    if sonuc.get("success"):
+                        st.success("Kullanıcı eklendi.")
+                        st.rerun()
+                    else:
+                        st.error(sonuc.get("error", "Eklenemedi."))
+
+        if not kullanicilar:
+            empty_state("👥", "Henüz kullanıcı tanımlanmadı. Yukarıdan ilk kullanıcıyı ekleyin.")
+        else:
+            st.markdown("**Kayıtlı Kullanıcılar**")
+            hc1, hc2, hc3, hc4, hc5 = st.columns([2, 2, 2, 2, 1])
+            hc1.markdown("**Bölge**")
+            hc2.markdown("**Mağaza**")
+            hc3.markdown("**Kullanıcı Adı**")
+            hc4.markdown("**Şifre**")
+            hc5.markdown("**Sil**")
+
+            for k in sorted(kullanicilar, key=lambda x: (x["bolge"], x["magaza"])):
+                c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 2, 1])
+                yeni_bolge = c1.text_input("Bölge", value=k["bolge"], key=f"kb_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_magaza = c2.text_input("Mağaza", value=k["magaza"], key=f"km_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_kadi = c3.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_sifre = c4.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
+
+                degisti = (yeni_bolge != k["bolge"] or yeni_magaza != k["magaza"] or
+                           yeni_kadi != k["kullanici_adi"] or yeni_sifre != k["sifre"])
+                if degisti:
+                    if c5.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
+                        sonuc = api_cagir("save_user", orijinal_kullanici_adi=k["kullanici_adi"],
+                                           kullanici_adi=yeni_kadi, sifre=yeni_sifre,
+                                           ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza)
+                        if sonuc.get("success"):
+                            st.success(f"'{yeni_kadi}' güncellendi.")
+                            st.rerun()
+                        else:
+                            st.error(sonuc.get("error", "Güncellenemedi."))
+                else:
+                    if c5.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
+                        api_cagir("delete_user", kullanici_adi=k["kullanici_adi"])
+                        st.rerun()
 
     # --- DÖNEMLER ---
-    with sekmeler[0]:
+    with sekmeler[2]:
         st.markdown("##### Dönem Yönetimi")
         with st.form("yeni_donem_form"):
             c1, c2 = st.columns([3, 1])
@@ -429,7 +546,7 @@ def yonetici_paneli():
                 st.rerun()
 
     # --- SORULAR ---
-    with sekmeler[1]:
+    with sekmeler[3]:
         st.markdown("##### Soru Yönetimi")
         sorular_res = api_cagir("get_questions")
         sorular = sorular_res.get("sorular", [])
@@ -465,7 +582,7 @@ def yonetici_paneli():
             st.rerun()
 
     # --- DOLDURMA DURUMU ---
-    with sekmeler[2]:
+    with sekmeler[4]:
         st.markdown("##### Doldurma Durumu")
         donemler_res = api_cagir("get_periods")
         tum_donemler = [d["donem_adi"] for d in donemler_res.get("donemler", [])]
@@ -488,7 +605,7 @@ def yonetici_paneli():
                 empty_state("📊", "Seçilen filtrelere uygun kayıt bulunamadı.")
 
     # --- EXCEL İNDİR ---
-    with sekmeler[3]:
+    with sekmeler[5]:
         st.markdown("##### Excel Raporu İndir")
         donemler_res = api_cagir("get_periods")
         tum_donemler = sorted([d["donem_adi"] for d in donemler_res.get("donemler", [])], reverse=True)
@@ -532,7 +649,7 @@ def yonetici_paneli():
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     # --- LOGLAR ---
-    with sekmeler[4]:
+    with sekmeler[6]:
         st.markdown("##### Giriş / İşlem Logları")
         c1, c2, c3 = st.columns(3)
         ka_filtre = c1.text_input("Kullanıcı Adı Filtrele (boş = tümü)")

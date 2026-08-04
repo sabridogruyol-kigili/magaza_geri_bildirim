@@ -556,7 +556,7 @@ def yonetici_paneli():
 
 
 # ==================== YÖNLENDİRME ====================
-if APPS_SCRIPT_URL == "https://script.google.com/macros/s/AKfycbxS1WWlDieTqGvq35Pnr_30HPCuA1RLz3TkZDR1k-xGb6jSWNhHKHIKviXciMCUlOm2/exec":
+if APPS_SCRIPT_URL == "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN":
     st.warning("⚠️ Lütfen app.py içinde APPS_SCRIPT_URL değişkenini kendi Apps Script Web App URL'niz ile değiştirin.")
 
 sidebar_ciz()

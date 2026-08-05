@@ -107,6 +107,8 @@ if "bolge" not in st.session_state:
     st.session_state.bolge = None
 if "magaza" not in st.session_state:
     st.session_state.magaza = None
+if "magaza_kodu" not in st.session_state:
+    st.session_state.magaza_kodu = None
 
 
 # ==================== SIDEBAR ====================
@@ -141,7 +143,10 @@ def sidebar_ciz():
                 baslik = f"👤 {st.session_state.ad_soyad}"
                 st.markdown(f"**{baslik}**")
                 if st.session_state.magaza:
-                    st.caption(f"📍 {st.session_state.magaza}" + (f" — {st.session_state.bolge}" if st.session_state.bolge else ""))
+                    magaza_etiket = st.session_state.magaza
+                    if st.session_state.magaza_kodu:
+                        magaza_etiket += f" ({st.session_state.magaza_kodu})"
+                    st.caption(f"📍 {magaza_etiket}" + (f" — {st.session_state.bolge}" if st.session_state.bolge else ""))
             else:
                 st.markdown("**🔑 Yönetici Paneli**")
             if st.button("🔒 Çıkış Yap", use_container_width=True):
@@ -150,6 +155,7 @@ def sidebar_ciz():
                 st.session_state.ad_soyad = None
                 st.session_state.bolge = None
                 st.session_state.magaza = None
+                st.session_state.magaza_kodu = None
                 st.session_state.view = "home"
                 st.rerun()
 
@@ -248,6 +254,7 @@ def kullanici_giris_ekrani():
                 st.session_state.ad_soyad = sonuc.get("ad_soyad")
                 st.session_state.bolge = sonuc.get("bolge")
                 st.session_state.magaza = sonuc.get("magaza")
+                st.session_state.magaza_kodu = sonuc.get("magaza_kodu")
                 st.rerun()
             else:
                 st.error(sonuc.get("error", "Giriş başarısız."))
@@ -274,18 +281,20 @@ def yonetici_giris_ekrani():
 
 
 # ==================== KULLANICI PANELİ ====================
-def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None, onizleme=False, key_prefix=""):
+def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None, magaza_kodu=None, onizleme=False, key_prefix=""):
     ka = kullanici_adi if kullanici_adi is not None else st.session_state.kullanici_adi
     ads = ad_soyad if ad_soyad is not None else st.session_state.ad_soyad
     bl = bolge if bolge is not None else st.session_state.bolge
     mg = magaza if magaza is not None else st.session_state.magaza
+    mk = magaza_kodu if magaza_kodu is not None else st.session_state.magaza_kodu
 
     if onizleme:
         st.info("🧪 **Önizleme modu** — bu ekran kullanıcıların göreceği ekranın birebir aynısıdır. Buradan yapılan kayıtlar/güncellemeler sisteme gerçekten kaydedilir.", icon="🧪")
 
     bolge_magaza_satiri = ""
     if bl or mg:
-        parcalar = [p for p in [bl, mg] if p]
+        mg_etiket = f"{mg} ({mk})" if (mg and mk) else (mg or "")
+        parcalar = [p for p in [bl, mg_etiket] if p]
         bolge_magaza_satiri = f'<div style="font-size:12px;opacity:0.7;margin-top:2px;">📍 {" — ".join(parcalar)}</div>'
 
     st.markdown(f"""
@@ -443,28 +452,28 @@ def yonetici_paneli():
                 secili = secilecekler[secim]
                 st.divider()
                 kullanici_paneli(kullanici_adi=secili["kullanici_adi"], ad_soyad=secili["ad_soyad"],
-                                  bolge=secili["bolge"], magaza=secili["magaza"],
+                                  bolge=secili["bolge"], magaza=secili["magaza"], magaza_kodu=secili.get("magaza_kodu"),
                                   onizleme=True, key_prefix="onizleme_")
         else:
             st.divider()
             kullanici_paneli(kullanici_adi="TEST_ONIZLEME", ad_soyad="Test Kullanıcısı",
-                              bolge="Test Bölge", magaza="Test Mağaza",
+                              bolge="Test Bölge", magaza="Test Mağaza", magaza_kodu="TST01",
                               onizleme=True, key_prefix="onizleme_")
 
     # --- KULLANICI AYARLARI ---
     with sekmeler[1]:
         st.markdown("##### Kullanıcı Yönetimi")
-        st.caption("Her satır bir mağaza girişini temsil eder. Kullanıcı adı, şifre, bölge ve mağaza bilgisini buradan yönetin.")
+        st.caption("Her satır bir mağaza girişini temsil eder. Kullanıcı adı, şifre, bölge, mağaza ve mağaza kodu bilgisini buradan yönetin.")
 
         kullanicilar_res = api_cagir("get_users")
         kullanicilar = kullanicilar_res.get("kullanicilar", [])
 
         with st.expander("📥 Excel'den Toplu İçe Aktar"):
-            st.caption("Sütun başlıkları: **Bölge, Mağaza, Kullanıcı Adı, Şifre** (sırası ve büyük/küçük harf önemli değil). "
+            st.caption("Sütun başlıkları: **Bölge, Mağaza, Mağaza Kodu, Kullanıcı Adı, Şifre** (sırası ve büyük/küçük harf önemli değil). "
                        "Zaten var olan bir kullanıcı adı gelirse bilgileri güncellenir, yeni ise eklenir.")
             ornek_df = pd.DataFrame([
-                {"Bölge": "Marmara", "Mağaza": "Kadıköy AVM", "Kullanıcı Adı": "kadikoy01", "Şifre": "kdk2026"},
-                {"Bölge": "Ege", "Mağaza": "Alsancak", "Kullanıcı Adı": "alsancak01", "Şifre": "als2026"},
+                {"Bölge": "Marmara", "Mağaza": "Kadıköy AVM", "Mağaza Kodu": "1001", "Kullanıcı Adı": "kadikoy01", "Şifre": "kdk2026"},
+                {"Bölge": "Ege", "Mağaza": "Alsancak", "Mağaza Kodu": "1002", "Kullanıcı Adı": "alsancak01", "Şifre": "als2026"},
             ])
             ornek_buf = BytesIO()
             with pd.ExcelWriter(ornek_buf, engine="openpyxl") as writer:
@@ -478,7 +487,9 @@ def yonetici_paneli():
                 baslik_haritasi = {}
                 for kolon in df_excel.columns:
                     norm = str(kolon).strip().lower().replace("ı", "i").replace("ğ", "g").replace("ö", "o").replace("ü", "u").replace("ş", "s").replace("ç", "c")
-                    if "bolge" in norm:
+                    if "kod" in norm:
+                        baslik_haritasi[kolon] = "magaza_kodu"
+                    elif "bolge" in norm:
                         baslik_haritasi[kolon] = "bolge"
                     elif "magaza" in norm:
                         baslik_haritasi[kolon] = "magaza"
@@ -491,7 +502,10 @@ def yonetici_paneli():
                 if eksik:
                     st.error(f"Excel dosyasında şu sütunlar tanınamadı: {', '.join(eksik)}. Örnek şablonu indirip başlıkları kontrol edin.")
                 else:
-                    df_map = df_excel.rename(columns=baslik_haritasi)[["bolge", "magaza", "kullanici_adi", "sifre"]]
+                    df_map = df_excel.rename(columns=baslik_haritasi)
+                    if "magaza_kodu" not in df_map.columns:
+                        df_map["magaza_kodu"] = ""
+                    df_map = df_map[["bolge", "magaza", "magaza_kodu", "kullanici_adi", "sifre"]]
                     st.dataframe(df_map, use_container_width=True, hide_index=True)
                     if st.button("✅ İçe Aktarımı Onayla", type="primary"):
                         satirlar = df_map.fillna("").astype(str).to_dict(orient="records")
@@ -504,18 +518,19 @@ def yonetici_paneli():
 
         with st.expander("➕ Yeni Kullanıcı Ekle", expanded=(len(kullanicilar) == 0)):
             with st.form("yeni_kullanici_form", clear_on_submit=True):
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 y_bolge = c1.text_input("Bölge")
                 y_magaza = c2.text_input("Mağaza")
-                y_kadi = c3.text_input("Kullanıcı Adı")
-                y_sifre = c4.text_input("Şifre")
+                y_magaza_kodu = c3.text_input("Mağaza Kodu")
+                y_kadi = c4.text_input("Kullanıcı Adı")
+                y_sifre = c5.text_input("Şifre")
                 ekle_kullanici = st.form_submit_button("Ekle", type="primary")
             if ekle_kullanici:
                 if not y_kadi or not y_sifre:
                     st.warning("Kullanıcı adı ve şifre zorunludur.")
                 else:
                     sonuc = api_cagir("save_user", kullanici_adi=y_kadi, sifre=y_sifre,
-                                       ad_soyad=y_magaza or y_kadi, bolge=y_bolge, magaza=y_magaza)
+                                       ad_soyad=y_magaza or y_kadi, bolge=y_bolge, magaza=y_magaza, magaza_kodu=y_magaza_kodu)
                     if sonuc.get("success"):
                         st.success("Kullanıcı eklendi.")
                         st.rerun()
@@ -526,34 +541,38 @@ def yonetici_paneli():
             empty_state("👥", "Henüz kullanıcı tanımlanmadı. Yukarıdan ilk kullanıcıyı ekleyin.")
         else:
             st.markdown("**Kayıtlı Kullanıcılar**")
-            hc1, hc2, hc3, hc4, hc5 = st.columns([2, 2, 2, 2, 1])
+            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2, 2, 1.5, 2, 2, 1])
             hc1.markdown("**Bölge**")
             hc2.markdown("**Mağaza**")
-            hc3.markdown("**Kullanıcı Adı**")
-            hc4.markdown("**Şifre**")
-            hc5.markdown("**Sil**")
+            hc3.markdown("**Mağaza Kodu**")
+            hc4.markdown("**Kullanıcı Adı**")
+            hc5.markdown("**Şifre**")
+            hc6.markdown("**Sil**")
 
             for k in sorted(kullanicilar, key=lambda x: (x["bolge"], x["magaza"])):
-                c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 2, 1])
+                c1, c2, c3, c4, c5, c6 = st.columns([2, 2, 1.5, 2, 2, 1])
                 yeni_bolge = c1.text_input("Bölge", value=k["bolge"], key=f"kb_{k['kullanici_adi']}", label_visibility="collapsed")
                 yeni_magaza = c2.text_input("Mağaza", value=k["magaza"], key=f"km_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_kadi = c3.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_sifre = c4.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_magaza_kodu = c3.text_input("Mağaza Kodu", value=k.get("magaza_kodu", ""), key=f"kmk_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_kadi = c4.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
+                yeni_sifre = c5.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
 
                 degisti = (yeni_bolge != k["bolge"] or yeni_magaza != k["magaza"] or
+                           yeni_magaza_kodu != k.get("magaza_kodu", "") or
                            yeni_kadi != k["kullanici_adi"] or yeni_sifre != k["sifre"])
                 if degisti:
-                    if c5.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
+                    if c6.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
                         sonuc = api_cagir("save_user", orijinal_kullanici_adi=k["kullanici_adi"],
                                            kullanici_adi=yeni_kadi, sifre=yeni_sifre,
-                                           ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza)
+                                           ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza,
+                                           magaza_kodu=yeni_magaza_kodu)
                         if sonuc.get("success"):
                             st.success(f"'{yeni_kadi}' güncellendi.")
                             st.rerun()
                         else:
                             st.error(sonuc.get("error", "Güncellenemedi."))
                 else:
-                    if c5.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
+                    if c6.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
                         api_cagir("delete_user", kullanici_adi=k["kullanici_adi"])
                         st.rerun()
 

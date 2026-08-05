@@ -62,14 +62,52 @@ def empty_state(icon, message):
 
 
 # ==================== YARDIMCI FONKSİYONLAR ====================
+_OKUMA_ISLEMLERI = {"get_periods", "get_declaration", "get_records", "get_questions",
+                    "get_users", "get_fill_status", "get_export_data", "get_logs"}
+
+
 def api_cagir(action, **kwargs):
     payload = {"action": action, "ip": get_ip(), "user_agent": get_user_agent()}
     payload.update(kwargs)
     try:
         r = requests.post(APPS_SCRIPT_URL, json=payload, timeout=60)
-        return r.json()
+        sonuc = r.json()
     except Exception as e:
         return {"success": False, "error": f"Bağlantı hatası: {e}"}
+    # Bu bir YAZMA işlemiyse (get_ ile başlamıyorsa) ve başarılıysa, önbelleği temizle
+    # ki bir sonraki okuma isteği güncel veriyi göstersin.
+    if action not in _OKUMA_ISLEMLERI and sonuc.get("success"):
+        _api_get_cached.clear()
+    return sonuc
+
+
+def _hashable(deger):
+    if isinstance(deger, list):
+        return tuple(_hashable(x) for x in deger)
+    if isinstance(deger, dict):
+        return tuple(sorted((k, _hashable(v)) for k, v in deger.items()))
+    return deger
+
+
+def _hashable_geri(deger):
+    if isinstance(deger, tuple):
+        return [_hashable_geri(x) for x in deger]
+    return deger
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _api_get_cached(action, **kwargs_hashable):
+    kwargs = {k: _hashable_geri(v) for k, v in kwargs_hashable.items()}
+    return api_cagir(action, **kwargs)
+
+
+def api_get(action, **kwargs):
+    """Sadece OKUMA amaçlı işlemler için — 20 saniye önbellekli, gereksiz Sheets isteklerini azaltır."""
+    return _api_get_cached(action, **{k: _hashable(v) for k, v in kwargs.items()})
+
+
+def onbellek_temizle():
+    _api_get_cached.clear()
 
 
 def get_ip():
@@ -157,6 +195,10 @@ def sidebar_ciz():
                 st.session_state.magaza = None
                 st.session_state.magaza_kodu = None
                 st.session_state.view = "home"
+                st.rerun()
+
+            if st.button("🔄 Verileri Yenile", use_container_width=True, help="Değişiklik yaptıysanız ve hemen görünmüyorsa buna basın"):
+                onbellek_temizle()
                 st.rerun()
 
         st.divider()
@@ -307,7 +349,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
         </div>
     """, unsafe_allow_html=True)
 
-    donemler_res = api_cagir("get_periods")
+    donemler_res = api_get("get_periods")
     if not donemler_res.get("success"):
         st.error("Dönemler alınamadı.")
         return
@@ -319,7 +361,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
     donem = st.selectbox("Dönem Seçin", aktif_donemler, format_func=donem_etiket, key=f"{key_prefix}donem_sec")
 
     # --- Beyan sayısı ---
-    beyan_res = api_cagir("get_declaration", kullanici_adi=ka, donem=donem)
+    beyan_res = api_get("get_declaration", kullanici_adi=ka, donem=donem)
     mevcut_beyan = beyan_res.get("beyan_sayisi", 0)
 
     st.markdown('<span class="pill">1. ADIM</span>', unsafe_allow_html=True)
@@ -336,7 +378,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
             st.rerun()
 
     # --- Mevcut kayıtlar ---
-    kayit_res = api_cagir("get_records", kullanici_adi=ka, donem=donem)
+    kayit_res = api_get("get_records", kullanici_adi=ka, donem=donem)
     personeller = kayit_res.get("personeller", [])
 
     st.markdown('<span class="pill">2. ADIM</span>', unsafe_allow_html=True)
@@ -349,7 +391,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
     st.markdown('<span class="pill">3. ADIM</span>', unsafe_allow_html=True)
     st.markdown("##### Personel Ekle / Düzenle")
 
-    sorular_res = api_cagir("get_questions")
+    sorular_res = api_get("get_questions")
     sorular = sorular_res.get("sorular", [])
     if not sorular:
         empty_state("❓", "Henüz soru tanımlanmamış. Yöneticinizle iletişime geçin.")
@@ -442,7 +484,7 @@ def yonetici_paneli():
                            ["Kayıtlı bir kullanıcıyı seç", "Örnek/test kullanıcısı ile önizle"], horizontal=True)
 
         if kaynak == "Kayıtlı bir kullanıcıyı seç":
-            kullanicilar_res = api_cagir("get_users")
+            kullanicilar_res = api_get("get_users")
             kullanicilar = kullanicilar_res.get("kullanicilar", [])
             if not kullanicilar:
                 empty_state("👥", "Henüz kullanıcı tanımlanmadı. Önce 'Kullanıcı Ayarları' sekmesinden ekleyin.")
@@ -465,7 +507,7 @@ def yonetici_paneli():
         st.markdown("##### Kullanıcı Yönetimi")
         st.caption("Her satır bir mağaza girişini temsil eder. Kullanıcı adı, şifre, bölge, mağaza ve mağaza kodu bilgisini buradan yönetin.")
 
-        kullanicilar_res = api_cagir("get_users")
+        kullanicilar_res = api_get("get_users")
         kullanicilar = kullanicilar_res.get("kullanicilar", [])
 
         with st.expander("📥 Excel'den Toplu İçe Aktar"):
@@ -573,6 +615,16 @@ def yonetici_paneli():
             if not gosterilecekler:
                 empty_state("🔍", "Bu filtrelere uygun kullanıcı bulunamadı.")
             else:
+                gosterilen_kadilar = [k["kullanici_adi"] for k in gosterilecekler]
+
+                def _tumunu_sec_callback():
+                    yeni_durum = st.session_state.get("tumunu_sec_kutu", False)
+                    for ka in gosterilen_kadilar:
+                        st.session_state[f"sec_{ka}"] = yeni_durum
+
+                st.checkbox(f"☑️ Tümünü Seç ({len(gosterilen_kadilar)} kullanıcı — mevcut filtreye göre)",
+                            key="tumunu_sec_kutu", on_change=_tumunu_sec_callback)
+
                 hc0, hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([0.5, 2, 2, 1.5, 2, 2, 1])
                 hc0.markdown("**Seç**")
                 hc1.markdown("**Bölge**")
@@ -646,7 +698,7 @@ def yonetici_paneli():
             else:
                 st.error(sonuc.get("error"))
 
-        donemler_res = api_cagir("get_periods")
+        donemler_res = api_get("get_periods")
         donemler = donemler_res.get("donemler", [])
         if not donemler:
             empty_state("🗓️", "Henüz dönem tanımlanmadı. Yukarıdan yeni bir dönem ekleyin.")
@@ -661,7 +713,7 @@ def yonetici_paneli():
     # --- SORULAR ---
     with sekmeler[3]:
         st.markdown("##### Soru Yönetimi")
-        sorular_res = api_cagir("get_questions")
+        sorular_res = api_get("get_questions")
         sorular = sorular_res.get("sorular", [])
 
         with st.expander("📥 Excel'den Toplu İçe Aktar"):
@@ -782,13 +834,13 @@ def yonetici_paneli():
     # --- DOLDURMA DURUMU ---
     with sekmeler[4]:
         st.markdown("##### Doldurma Durumu")
-        donemler_res = api_cagir("get_periods")
+        donemler_res = api_get("get_periods")
         tum_donemler = [d["donem_adi"] for d in donemler_res.get("donemler", [])]
         secilen_donemler = st.multiselect("Dönem(ler) Seçin", tum_donemler, default=tum_donemler[:1], format_func=donem_etiket)
         durum_filtre = st.multiselect("Durum Filtrele", ["tamamlandi", "kismen", "doldurmadi"], default=["doldurmadi"])
 
         if secilen_donemler:
-            res = api_cagir("get_fill_status", donemler=secilen_donemler)
+            res = api_get("get_fill_status", donemler=secilen_donemler)
             df = pd.DataFrame(res.get("durumlar", []))
             if not df.empty:
                 if durum_filtre:
@@ -805,9 +857,9 @@ def yonetici_paneli():
     # --- EXCEL İNDİR ---
     with sekmeler[5]:
         st.markdown("##### Excel Raporu İndir")
-        donemler_res = api_cagir("get_periods")
+        donemler_res = api_get("get_periods")
         tum_donemler = sorted([d["donem_adi"] for d in donemler_res.get("donemler", [])], reverse=True)
-        kullanicilar_res = api_cagir("get_fill_status", donemler=[])
+        kullanicilar_res = api_get("get_fill_status", donemler=[])
         tum_kullanicilar = sorted(set(d["kullanici_adi"] for d in kullanicilar_res.get("durumlar", [])))
 
         st.markdown("**Çeyreklik Hızlı Filtre**")
@@ -828,7 +880,7 @@ def yonetici_paneli():
         secilen_unvanlar = st.multiselect("Unvan(lar) (boş = tümü)", UNVAN_LISTESI, key="export_unvan")
 
         if st.button("📥 Excel Oluştur ve İndir", type="primary"):
-            res = api_cagir("get_export_data", donemler=secilen_donemler, kullanicilar=secilen_kullanicilar, unvanlar=secilen_unvanlar)
+            res = api_get("get_export_data", donemler=secilen_donemler, kullanicilar=secilen_kullanicilar, unvanlar=secilen_unvanlar)
             veriler = res.get("veriler", [])
             if not veriler:
                 st.warning("Seçilen filtrelere uygun veri bulunamadı.")
@@ -859,7 +911,7 @@ def yonetici_paneli():
             if ka_filtre: params["kullanici_adi"] = ka_filtre
             if bas_tarih: params["baslangic"] = str(bas_tarih)
             if bit_tarih: params["bitis"] = str(bit_tarih)
-            res = api_cagir("get_logs", **params)
+            res = api_get("get_logs", **params)
             df = pd.DataFrame(res.get("loglar", []))
             if not df.empty:
                 st.dataframe(df.rename(columns={

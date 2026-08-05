@@ -3,6 +3,9 @@ import requests
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+import base64
+import uuid
+import math
 
 # ==================== AYARLAR ====================
 # Apps Script'i "Web Uygulaması" olarak yayınladıktan sonra aldığınız URL'yi buraya yapıştırın
@@ -59,6 +62,112 @@ st.markdown("""
 
 def empty_state(icon, message):
     st.markdown(f"<div class='empty-box'><div class='icon'>{icon}</div><div class='msg'>{message}</div></div>", unsafe_allow_html=True)
+
+
+def _logo_base64():
+    try:
+        with open(LOGO_DOSYASI, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _basari_animasyonu():
+    """Kayıt başarılı olduğunda balon yerine Kiğılı logosuyla gösterilen kutlama animasyonu.
+    Ekranın tam ortasında sabit (fixed) bir katman olarak belirir: dönen bordo halka,
+    şok dalgası, saçılan konfeti ve parıltı efektiyle ~4 saniye sonra otomatik kaybolur.
+    Her çağrıda benzersiz bir kimlik kullanılır ki tarayıcı animasyonu atlamasın."""
+    logo_b64 = _logo_base64()
+    if not logo_b64:
+        st.balloons()
+        return
+
+    bid = f"basari_{uuid.uuid4().hex[:8]}"
+    RENKLER = ["#7A2331", "#A9394A", "#FFFFFF", "#591722", "#D6A93A"]
+    konfeti_html = ""
+    for i in range(18):
+        aci = (360 / 18) * i
+        mesafe = 110 + (i % 3) * 30
+        dx = round(math.cos(math.radians(aci)) * mesafe)
+        dy = round(math.sin(math.radians(aci)) * mesafe)
+        renk = RENKLER[i % len(RENKLER)]
+        boyut = 8 + (i % 3) * 4
+        gecikme = round((i % 5) * 0.04, 2)
+        konfeti_html += (
+            f'<div style="position:absolute;top:50%;left:50%;width:{boyut}px;height:{boyut}px;'
+            f'background:{renk};border-radius:{"50%" if i % 2 == 0 else "2px"};'
+            f'animation:{bid}_konfeti_{i} 1.8s ease-out {gecikme}s forwards;opacity:0;"></div>'
+            f'<style>@keyframes {bid}_konfeti_{i} {{'
+            f'0% {{ transform: translate(-50%,-50%) scale(0); opacity:0; }}'
+            f'15% {{ opacity:1; }}'
+            f'100% {{ transform: translate(calc(-50% + {dx}px), calc(-50% + {dy}px)) scale(1) rotate({aci+180}deg); opacity:0; }}'
+            f'}}</style>'
+        )
+
+    st.markdown(
+        f"""
+        <style>
+        @keyframes {bid}_pop {{
+            0%   {{ transform: scale(0) rotate(-20deg); opacity: 0; }}
+            55%  {{ transform: scale(1.15) rotate(5deg); opacity: 1; }}
+            75%  {{ transform: scale(0.95) rotate(-2deg); }}
+            100% {{ transform: scale(1) rotate(0deg); opacity: 1; }}
+        }}
+        @keyframes {bid}_donen_halka {{
+            0%   {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+        @keyframes {bid}_glow {{
+            0%, 100% {{ box-shadow: 0 0 0px 0px rgba(122,35,49,0.55); }}
+            50%      {{ box-shadow: 0 0 40px 16px rgba(122,35,49,0.55); }}
+        }}
+        @keyframes {bid}_shockwave {{
+            0%   {{ transform: scale(0.3); opacity: 0.9; border-width: 6px; }}
+            100% {{ transform: scale(2.6); opacity: 0; border-width: 1px; }}
+        }}
+        @keyframes {bid}_fadeout {{
+            0%, 82% {{ opacity: 1; }}
+            100%    {{ opacity: 0; }}
+        }}
+        #{bid}_kapsayici {{
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999; pointer-events: none;
+            animation: {bid}_fadeout 4s ease-in forwards;
+        }}
+        #{bid}_ic {{
+            position: relative; width: 260px; height: 260px;
+            display: flex; justify-content: center; align-items: center;
+        }}
+        #{bid}_halka {{
+            position: absolute; width: 260px; height: 260px; border-radius: 50%;
+            background: conic-gradient(from 0deg, #7A2331, #FFFFFF, #A9394A, #591722, #7A2331);
+            animation: {bid}_donen_halka 2.4s linear infinite;
+            opacity: 0.85;
+        }}
+        #{bid}_shock {{
+            position: absolute; width: 220px; height: 220px; border-radius: 50%;
+            border: 6px solid #7A2331;
+            animation: {bid}_shockwave 1.1s ease-out forwards;
+        }}
+        #{bid}_logo {{
+            position: relative; width: 220px; height: 220px; border-radius: 50%;
+            background: #FFFFFF; padding: 10px; object-fit: cover; z-index: 2;
+            animation: {bid}_pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
+                       {bid}_glow 1.6s ease-in-out 0.7s 2;
+        }}
+        </style>
+        <div id="{bid}_kapsayici">
+            <div id="{bid}_ic">
+                <div id="{bid}_halka"></div>
+                <div id="{bid}_shock"></div>
+                {konfeti_html}
+                <img id="{bid}_logo" src="data:image/png;base64,{logo_b64}" />
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ==================== YARDIMCI FONKSİYONLAR ====================
@@ -358,6 +467,12 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
         </div>
     """, unsafe_allow_html=True)
 
+    basari_anahtari = f"{key_prefix}basari_mesaji"
+    if st.session_state.get(basari_anahtari):
+        st.success(f"✅ {st.session_state[basari_anahtari]}")
+        _basari_animasyonu()
+        st.session_state[basari_anahtari] = None
+
     donemler_res = api_get("get_periods")
     if not donemler_res.get("success"):
         st.error("Dönemler alınamadı.")
@@ -383,7 +498,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
         st.write("")
         if st.button("Kaydet / Güncelle", key=f"{key_prefix}beyan_kaydet"):
             api_cagir("save_declaration", kullanici_adi=ka, donem=donem, beyan_sayisi=yeni_beyan)
-            st.success("Çalışan sayısı kaydedildi.")
+            st.session_state[f"{key_prefix}basari_mesaji"] = f"Çalışan sayınız {yeni_beyan} olarak kaydedildi."
             st.rerun()
 
     # --- Mevcut kayıtlar ---
@@ -475,7 +590,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
             sonuc = api_cagir("save_record", kullanici_adi=ka, donem=donem,
                                sicil_no=sicil_no_temiz, personel_ad_soyad=ad_soyad_girdi, unvan=unvan, cevaplar=cevaplar_payload)
             if sonuc.get("success"):
-                st.success(f"Kayıt başarıyla kaydedildi (Sicil No: {sicil_no_temiz}).")
+                st.session_state[f"{key_prefix}basari_mesaji"] = f"İşleminiz tamamlandı! {ad_soyad_girdi} için kayıt başarıyla eklendi (Sicil No: {sicil_no_temiz})."
                 st.rerun()
             else:
                 st.error(sonuc.get("error", "Kayıt sırasında hata oluştu."))

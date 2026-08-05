@@ -507,11 +507,21 @@ def yonetici_paneli():
                         df_map["magaza_kodu"] = ""
                     df_map = df_map[["bolge", "magaza", "magaza_kodu", "kullanici_adi", "sifre"]]
                     st.dataframe(df_map, use_container_width=True, hide_index=True)
+
+                    tekrar_eden_adlar = df_map["kullanici_adi"].astype(str).str.strip()
+                    tekrar_eden_adlar = tekrar_eden_adlar[tekrar_eden_adlar.duplicated(keep=False) & (tekrar_eden_adlar != "")]
+                    if not tekrar_eden_adlar.empty:
+                        st.warning(f"⚠️ Excel'de birden fazla satırda aynı kullanıcı adı kullanılmış: **{', '.join(sorted(set(tekrar_eden_adlar)))}**. "
+                                   "Her mağazanın kullanıcı adı FARKLI olmalı — devam ederseniz bu isimlerden sadece sonuncusu kaydedilir, diğerleri kaybolur.")
+
                     if st.button("✅ İçe Aktarımı Onayla", type="primary"):
                         satirlar = df_map.fillna("").astype(str).to_dict(orient="records")
                         sonuc = api_cagir("import_users", kullanicilar=satirlar)
                         if sonuc.get("success"):
-                            st.success(f"İçe aktarıldı: {sonuc.get('eklenen', 0)} yeni, {sonuc.get('guncellenen', 0)} güncellendi, {sonuc.get('atlanan', 0)} atlandı (eksik bilgi).")
+                            mesaj = f"İçe aktarıldı: {sonuc.get('eklenen', 0)} yeni, {sonuc.get('guncellenen', 0)} güncellendi, {sonuc.get('atlanan', 0)} atlandı (eksik bilgi)."
+                            if sonuc.get("tekrar_eden"):
+                                mesaj += f" ⚠️ {sonuc.get('tekrar_eden')} satırda AYNI kullanıcı adı Excel içinde birden fazla kez geçiyordu, sadece sonuncusu kaydedildi — Excel dosyanızı kontrol edin (her mağazanın kullanıcı adı FARKLI olmalı)."
+                            st.success(mesaj)
                             st.rerun()
                         else:
                             st.error(sonuc.get("error", "İçe aktarım başarısız."))
@@ -541,40 +551,81 @@ def yonetici_paneli():
             empty_state("👥", "Henüz kullanıcı tanımlanmadı. Yukarıdan ilk kullanıcıyı ekleyin.")
         else:
             st.markdown("**Kayıtlı Kullanıcılar**")
-            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2, 2, 1.5, 2, 2, 1])
-            hc1.markdown("**Bölge**")
-            hc2.markdown("**Mağaza**")
-            hc3.markdown("**Mağaza Kodu**")
-            hc4.markdown("**Kullanıcı Adı**")
-            hc5.markdown("**Şifre**")
-            hc6.markdown("**Sil**")
 
-            for k in sorted(kullanicilar, key=lambda x: (x["bolge"], x["magaza"])):
-                c1, c2, c3, c4, c5, c6 = st.columns([2, 2, 1.5, 2, 2, 1])
-                yeni_bolge = c1.text_input("Bölge", value=k["bolge"], key=f"kb_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_magaza = c2.text_input("Mağaza", value=k["magaza"], key=f"km_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_magaza_kodu = c3.text_input("Mağaza Kodu", value=k.get("magaza_kodu", ""), key=f"kmk_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_kadi = c4.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
-                yeni_sifre = c5.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
+            fc1, fc2 = st.columns([2, 2])
+            arama_metni = fc1.text_input("🔍 Ara", placeholder="Kullanıcı adı, mağaza, bölge veya mağaza kodu...", key="kullanici_ara")
+            tum_bolgeler = sorted(set(k["bolge"] for k in kullanicilar if k["bolge"]))
+            bolge_filtre = fc2.multiselect("Bölge Filtrele", tum_bolgeler, key="kullanici_bolge_filtre")
 
-                degisti = (yeni_bolge != k["bolge"] or yeni_magaza != k["magaza"] or
-                           yeni_magaza_kodu != k.get("magaza_kodu", "") or
-                           yeni_kadi != k["kullanici_adi"] or yeni_sifre != k["sifre"])
-                if degisti:
-                    if c6.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
-                        sonuc = api_cagir("save_user", orijinal_kullanici_adi=k["kullanici_adi"],
-                                           kullanici_adi=yeni_kadi, sifre=yeni_sifre,
-                                           ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza,
-                                           magaza_kodu=yeni_magaza_kodu)
+            gosterilecekler = kullanicilar
+            if arama_metni:
+                q = arama_metni.strip().lower()
+                gosterilecekler = [
+                    k for k in gosterilecekler
+                    if q in str(k["kullanici_adi"]).lower() or q in str(k["magaza"]).lower()
+                    or q in str(k["bolge"]).lower() or q in str(k.get("magaza_kodu", "")).lower()
+                ]
+            if bolge_filtre:
+                gosterilecekler = [k for k in gosterilecekler if k["bolge"] in bolge_filtre]
+
+            st.caption(f"{len(gosterilecekler)} / {len(kullanicilar)} kullanıcı gösteriliyor")
+
+            if not gosterilecekler:
+                empty_state("🔍", "Bu filtrelere uygun kullanıcı bulunamadı.")
+            else:
+                hc0, hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([0.5, 2, 2, 1.5, 2, 2, 1])
+                hc0.markdown("**Seç**")
+                hc1.markdown("**Bölge**")
+                hc2.markdown("**Mağaza**")
+                hc3.markdown("**Mağaza Kodu**")
+                hc4.markdown("**Kullanıcı Adı**")
+                hc5.markdown("**Şifre**")
+                hc6.markdown("**Sil**")
+
+                secilenler = []
+                for k in sorted(gosterilecekler, key=lambda x: (x["bolge"], x["magaza"])):
+                    c0, c1, c2, c3, c4, c5, c6 = st.columns([0.5, 2, 2, 1.5, 2, 2, 1])
+                    secildi = c0.checkbox("Seç", key=f"sec_{k['kullanici_adi']}", label_visibility="collapsed")
+                    if secildi:
+                        secilenler.append(k["kullanici_adi"])
+                    yeni_bolge = c1.text_input("Bölge", value=k["bolge"], key=f"kb_{k['kullanici_adi']}", label_visibility="collapsed")
+                    yeni_magaza = c2.text_input("Mağaza", value=k["magaza"], key=f"km_{k['kullanici_adi']}", label_visibility="collapsed")
+                    yeni_magaza_kodu = c3.text_input("Mağaza Kodu", value=k.get("magaza_kodu", ""), key=f"kmk_{k['kullanici_adi']}", label_visibility="collapsed")
+                    yeni_kadi = c4.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
+                    yeni_sifre = c5.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
+
+                    degisti = (yeni_bolge != k["bolge"] or yeni_magaza != k["magaza"] or
+                               yeni_magaza_kodu != k.get("magaza_kodu", "") or
+                               yeni_kadi != k["kullanici_adi"] or yeni_sifre != k["sifre"])
+                    if degisti:
+                        if c6.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
+                            sonuc = api_cagir("save_user", orijinal_kullanici_adi=k["kullanici_adi"],
+                                               kullanici_adi=yeni_kadi, sifre=yeni_sifre,
+                                               ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza,
+                                               magaza_kodu=yeni_magaza_kodu)
+                            if sonuc.get("success"):
+                                st.success(f"'{yeni_kadi}' güncellendi.")
+                                st.rerun()
+                            else:
+                                st.error(sonuc.get("error", "Güncellenemedi."))
+                    else:
+                        if c6.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
+                            api_cagir("delete_user", kullanici_adi=k["kullanici_adi"])
+                            st.rerun()
+
+                st.divider()
+                if secilenler:
+                    st.warning(f"⚠️ {len(secilenler)} kullanıcı seçili: {', '.join(secilenler[:8])}{' ...' if len(secilenler) > 8 else ''}")
+                    onay = st.checkbox(f"Bu {len(secilenler)} kullanıcıyı kalıcı olarak silmek istediğimi onaylıyorum", key="toplu_sil_onay")
+                    if st.button(f"🗑️ Seçilenleri Sil ({len(secilenler)})", type="primary", disabled=not onay):
+                        sonuc = api_cagir("delete_users_toplu", kullanici_adilari=secilenler)
                         if sonuc.get("success"):
-                            st.success(f"'{yeni_kadi}' güncellendi.")
+                            st.success(f"{sonuc.get('silinen', 0)} kullanıcı silindi.")
                             st.rerun()
                         else:
-                            st.error(sonuc.get("error", "Güncellenemedi."))
+                            st.error(sonuc.get("error", "Silinemedi."))
                 else:
-                    if c6.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
-                        api_cagir("delete_user", kullanici_adi=k["kullanici_adi"])
-                        st.rerun()
+                    st.caption("Toplu silmek için yukarıdan kullanıcı satırlarını seçin.")
 
     # --- DÖNEMLER ---
     with sekmeler[2]:

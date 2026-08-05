@@ -136,23 +136,25 @@ def _basari_animasyonu():
             animation: {bid}_fadeout 4s ease-in forwards;
         }}
         #{bid}_ic {{
-            position: relative; width: 260px; height: 260px;
+            position: relative; width: 320px; height: 320px;
             display: flex; justify-content: center; align-items: center;
         }}
         #{bid}_halka {{
-            position: absolute; width: 260px; height: 260px; border-radius: 50%;
+            position: absolute; width: 300px; height: 300px; border-radius: 50%;
             background: conic-gradient(from 0deg, #7A2331, #FFFFFF, #A9394A, #591722, #7A2331);
             animation: {bid}_donen_halka 2.4s linear infinite;
             opacity: 0.85;
         }}
         #{bid}_shock {{
-            position: absolute; width: 220px; height: 220px; border-radius: 50%;
+            position: absolute; width: 260px; height: 260px; border-radius: 50%;
             border: 6px solid #7A2331;
             animation: {bid}_shockwave 1.1s ease-out forwards;
         }}
         #{bid}_logo {{
-            position: relative; width: 220px; height: 220px; border-radius: 50%;
-            background: #FFFFFF; padding: 10px; object-fit: cover; z-index: 2;
+            position: relative; width: 280px; height: auto; max-width: 80%;
+            border-radius: 18px;
+            background: #FFFFFF; padding: 16px; object-fit: contain; z-index: 2;
+            box-sizing: border-box;
             animation: {bid}_pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
                        {bid}_glow 1.6s ease-in-out 0.7s 2;
         }}

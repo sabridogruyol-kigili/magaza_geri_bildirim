@@ -8,8 +8,17 @@ import uuid
 import math
 
 # ==================== AYARLAR ====================
-# Apps Script'i "Web Uygulaması" olarak yayınladıktan sonra aldığınız URL'yi buraya yapıştırın
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxS1WWlDieTqGvq35Pnr_30HPCuA1RLz3TkZDR1k-xGb6jSWNhHKHIKviXciMCUlOm2/exec"
+# Bu ikisi artık kodun içinde değil, Streamlit Cloud'daki "Secrets" bölümünde tutuluyor
+# (Ayarlar > Secrets). Böylece GitHub reponuz herkese açık olsa bile bu bilgiler görünmez.
+# Secrets içine şu formatta ekleyin:
+#   APPS_SCRIPT_URL = "https://script.google.com/macros/s/.../exec"
+#   API_ANAHTARI = "Apps Script'teki API_ANAHTARI ile birebir aynı, uzun/rastgele bir metin"
+try:
+    APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
+    API_ANAHTARI = st.secrets["API_ANAHTARI"]
+except Exception:
+    APPS_SCRIPT_URL = "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN"
+    API_ANAHTARI = "kigili2026"
 
 UNVAN_LISTESI = [
     "Mağaza Müdür Yardımcısı", "Satış Şefi", "Satış Danışmanı",
@@ -178,7 +187,7 @@ _OKUMA_ISLEMLERI = {"get_periods", "get_declaration", "get_records", "get_questi
 
 
 def api_cagir(action, **kwargs):
-    payload = {"action": action, "ip": get_ip(), "user_agent": get_user_agent()}
+    payload = {"action": action, "ip": get_ip(), "user_agent": get_user_agent(), "anahtar": API_ANAHTARI}
     payload.update(kwargs)
     try:
         r = requests.post(APPS_SCRIPT_URL, json=payload, timeout=60)
@@ -1084,8 +1093,8 @@ def yonetici_paneli():
 
 
 # ==================== YÖNLENDİRME ====================
-if APPS_SCRIPT_URL == "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN":
-    st.warning("⚠️ Lütfen app.py içinde APPS_SCRIPT_URL değişkenini kendi Apps Script Web App URL'niz ile değiştirin.")
+if APPS_SCRIPT_URL == "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN" or API_ANAHTARI == "BURAYA_UZUN_RASTGELE_BIR_ANAHTAR_YAZIN":
+    st.warning("⚠️ Lütfen Streamlit Cloud'da Settings > Secrets bölümüne APPS_SCRIPT_URL ve API_ANAHTARI değerlerini ekleyin.")
 
 sidebar_ciz()
 

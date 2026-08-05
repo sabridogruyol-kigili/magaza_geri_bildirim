@@ -425,7 +425,8 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
     with st.form(f"{key_prefix}personel_form"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            sicil_no = st.text_input("Sicil Numarası", value=str(sicil_no_deger), disabled=(mod == "Mevcut Personeli Düzenle"))
+            sicil_no = st.text_input("Sicil Numarası", value=str(sicil_no_deger), disabled=(mod == "Mevcut Personeli Düzenle"),
+                                      help="6 haneden az girerseniz başına otomatik 0 eklenir (örn. 37 → 000037)")
         with c2:
             ad_soyad_girdi = st.text_input("Ad Soyad", value=ad_soyad_deger)
         with c3:
@@ -465,11 +466,16 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
         if not sicil_no or not ad_soyad_girdi:
             st.warning("Sicil numarası ve ad soyad zorunludur.")
         else:
+            sicil_no_temiz = sicil_no.strip()
+            if sicil_no_temiz.isdigit():
+                sicil_no_temiz = sicil_no_temiz.zfill(6)
+            elif len(sicil_no_temiz) < 6:
+                st.warning("Sicil numarası sayısal değil, olduğu gibi kaydedildi (otomatik 6 haneye tamamlama sadece rakamlar için yapılır).")
             cevaplar_payload = [{"soru_no": s["soru_no"], "soru_metni": s["soru_metni"], "cevap": cevap_girisleri[s["soru_no"]]} for s in sorular]
             sonuc = api_cagir("save_record", kullanici_adi=ka, donem=donem,
-                               sicil_no=sicil_no, personel_ad_soyad=ad_soyad_girdi, unvan=unvan, cevaplar=cevaplar_payload)
+                               sicil_no=sicil_no_temiz, personel_ad_soyad=ad_soyad_girdi, unvan=unvan, cevaplar=cevaplar_payload)
             if sonuc.get("success"):
-                st.success("Kayıt başarıyla kaydedildi.")
+                st.success(f"Kayıt başarıyla kaydedildi (Sicil No: {sicil_no_temiz}).")
                 st.rerun()
             else:
                 st.error(sonuc.get("error", "Kayıt sırasında hata oluştu."))

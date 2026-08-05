@@ -459,6 +459,49 @@ def yonetici_paneli():
         kullanicilar_res = api_cagir("get_users")
         kullanicilar = kullanicilar_res.get("kullanicilar", [])
 
+        with st.expander("📥 Excel'den Toplu İçe Aktar"):
+            st.caption("Sütun başlıkları: **Bölge, Mağaza, Kullanıcı Adı, Şifre** (sırası ve büyük/küçük harf önemli değil). "
+                       "Zaten var olan bir kullanıcı adı gelirse bilgileri güncellenir, yeni ise eklenir.")
+            ornek_df = pd.DataFrame([
+                {"Bölge": "Marmara", "Mağaza": "Kadıköy AVM", "Kullanıcı Adı": "kadikoy01", "Şifre": "kdk2026"},
+                {"Bölge": "Ege", "Mağaza": "Alsancak", "Kullanıcı Adı": "alsancak01", "Şifre": "als2026"},
+            ])
+            ornek_buf = BytesIO()
+            with pd.ExcelWriter(ornek_buf, engine="openpyxl") as writer:
+                ornek_df.to_excel(writer, index=False, sheet_name="Kullanicilar")
+            st.download_button("📄 Örnek Şablonu İndir", data=ornek_buf.getvalue(), file_name="kullanici_sablonu.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+            yuklenen = st.file_uploader("Excel dosyası seçin (.xlsx)", type=["xlsx", "xls"], key="kullanici_excel")
+            if yuklenen is not None:
+                df_excel = pd.read_excel(yuklenen, sheet_name=0)
+                baslik_haritasi = {}
+                for kolon in df_excel.columns:
+                    norm = str(kolon).strip().lower().replace("ı", "i").replace("ğ", "g").replace("ö", "o").replace("ü", "u").replace("ş", "s").replace("ç", "c")
+                    if "bolge" in norm:
+                        baslik_haritasi[kolon] = "bolge"
+                    elif "magaza" in norm:
+                        baslik_haritasi[kolon] = "magaza"
+                    elif "kullanici" in norm:
+                        baslik_haritasi[kolon] = "kullanici_adi"
+                    elif "sifre" in norm:
+                        baslik_haritasi[kolon] = "sifre"
+
+                eksik = {"bolge", "magaza", "kullanici_adi", "sifre"} - set(baslik_haritasi.values())
+                if eksik:
+                    st.error(f"Excel dosyasında şu sütunlar tanınamadı: {', '.join(eksik)}. Örnek şablonu indirip başlıkları kontrol edin.")
+                else:
+                    df_map = df_excel.rename(columns=baslik_haritasi)[["bolge", "magaza", "kullanici_adi", "sifre"]]
+                    st.dataframe(df_map, use_container_width=True, hide_index=True)
+                    if st.button("✅ İçe Aktarımı Onayla", type="primary"):
+                        satirlar = df_map.fillna("").astype(str).to_dict(orient="records")
+                        sonuc = api_cagir("import_users", kullanicilar=satirlar)
+                        if sonuc.get("success"):
+                            st.success(f"İçe aktarıldı: {sonuc.get('eklenen', 0)} yeni, {sonuc.get('guncellenen', 0)} güncellendi, {sonuc.get('atlanan', 0)} atlandı (eksik bilgi).")
+                            st.rerun()
+                        else:
+                            st.error(sonuc.get("error", "İçe aktarım başarısız."))
+
         with st.expander("➕ Yeni Kullanıcı Ekle", expanded=(len(kullanicilar) == 0)):
             with st.form("yeni_kullanici_form", clear_on_submit=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -551,8 +594,87 @@ def yonetici_paneli():
         sorular_res = api_cagir("get_questions")
         sorular = sorular_res.get("sorular", [])
 
+        with st.expander("📥 Excel'den Toplu İçe Aktar"):
+            st.caption("Sütun başlıkları: **Soru No (opsiyonel), Soru Metni, Cevap Tipi, Seçenekler (opsiyonel)**. "
+                       "Cevap Tipi olarak şunları yazabilirsiniz: **Sayısal**, **Sözel** (metin), **Seçmeli**, **1-10** (otomatik 1'den 10'a seçenek oluşturur).")
+            ornek_df = pd.DataFrame([
+                {"Soru No": 1, "Soru Metni": "Mağaza Ciro Hedef Gerçekleşme", "Cevap Tipi": "Sayısal", "Seçenekler": ""},
+                {"Soru No": 2, "Soru Metni": "Yakaladığın hedefi nasıl değerlendiriyorsun?", "Cevap Tipi": "Sözel", "Seçenekler": ""},
+                {"Soru No": 3, "Soru Metni": "Çalışan Değerlendirmesi", "Cevap Tipi": "1-10", "Seçenekler": ""},
+            ])
+            ornek_buf = BytesIO()
+            with pd.ExcelWriter(ornek_buf, engine="openpyxl") as writer:
+                ornek_df.to_excel(writer, index=False, sheet_name="Sorular")
+            st.download_button("📄 Örnek Şablonu İndir", data=ornek_buf.getvalue(), file_name="soru_sablonu.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="soru_sablon_indir")
+
+            mod = st.radio("İçe aktarma şekli", ["Mevcut soruların üzerine ekle/güncelle", "Tüm soruları bununla değiştir"], key="soru_import_mod")
+            yuklenen_soru = st.file_uploader("Excel dosyası seçin (.xlsx)", type=["xlsx", "xls"], key="soru_excel")
+
+            if yuklenen_soru is not None:
+                df_excel = pd.read_excel(yuklenen_soru, sheet_name=0)
+                baslik_haritasi = {}
+                for kolon in df_excel.columns:
+                    norm = str(kolon).strip().lower().replace("ı", "i").replace("ğ", "g").replace("ö", "o").replace("ü", "u").replace("ş", "s").replace("ç", "c")
+                    if "no" in norm:
+                        baslik_haritasi[kolon] = "soru_no"
+                    elif "metni" in norm or "soru" == norm:
+                        baslik_haritasi[kolon] = "soru_metni"
+                    elif "tip" in norm:
+                        baslik_haritasi[kolon] = "cevap_tipi"
+                    elif "secenek" in norm:
+                        baslik_haritasi[kolon] = "secenekler"
+
+                if "soru_metni" not in baslik_haritasi.values() or "cevap_tipi" not in baslik_haritasi.values():
+                    st.error("Excel dosyasında 'Soru Metni' ve 'Cevap Tipi' sütunları bulunamadı. Örnek şablonu indirip başlıkları kontrol edin.")
+                else:
+                    df_map = df_excel.rename(columns=baslik_haritasi)
+                    if "soru_no" not in df_map.columns:
+                        df_map["soru_no"] = None
+                    if "secenekler" not in df_map.columns:
+                        df_map["secenekler"] = ""
+
+                    def tip_normalize(deger):
+                        d = str(deger).strip().lower().replace("ı", "i")
+                        if "sayisal" in d or "sayı" in d.lower():
+                            return "sayisal", ""
+                        if "sozel" in d or "metin" in d:
+                            return "metin", ""
+                        if "1-10" in d or "1 10" in d:
+                            return "secmeli", "1,2,3,4,5,6,7,8,9,10"
+                        if "secmeli" in d or "seçmeli" in deger.lower():
+                            return "secmeli", ""
+                        if "skala" in d:
+                            return "skala", ""
+                        return "metin", ""
+
+                    onizleme_satirlari = []
+                    for _, row in df_map.iterrows():
+                        tip_sonuc, varsayilan_sec = tip_normalize(row["cevap_tipi"])
+                        secenek_deger = str(row.get("secenekler") or "").strip() or varsayilan_sec
+                        onizleme_satirlari.append({
+                            "soru_no": None if pd.isna(row.get("soru_no")) else int(row.get("soru_no")),
+                            "soru_metni": str(row["soru_metni"]).strip(),
+                            "cevap_tipi": tip_sonuc,
+                            "secenekler": secenek_deger,
+                        })
+
+                    st.dataframe(pd.DataFrame(onizleme_satirlari), use_container_width=True, hide_index=True)
+
+                    if mod == "Tüm soruları bununla değiştir":
+                        st.warning("⚠️ Bu seçenek mevcut TÜM soruları siler ve yerine yukarıdakileri yazar.")
+
+                    if st.button("✅ İçe Aktarımı Onayla", type="primary", key="soru_import_onayla"):
+                        mod_kodu = "degistir" if mod == "Tüm soruları bununla değiştir" else "ekle"
+                        sonuc = api_cagir("import_questions", sorular=onizleme_satirlari, mod=mod_kodu)
+                        if sonuc.get("success"):
+                            st.success(f"İçe aktarıldı: {sonuc.get('eklenen', 0)} yeni, {sonuc.get('guncellenen', 0)} güncellendi.")
+                            st.rerun()
+                        else:
+                            st.error(sonuc.get("error", "İçe aktarım başarısız."))
+
         if not sorular:
-            empty_state("❓", "Henüz soru tanımlanmadı. Aşağıdan ilk soruyu ekleyin.")
+            empty_state("❓", "Henüz soru tanımlanmadı. Yukarıdan toplu içe aktarın veya aşağıdan tek tek ekleyin.")
 
         for s in sorular:
             with st.expander(f"Soru {s['soru_no']}: {s['soru_metni'][:50]}"):
@@ -563,10 +685,16 @@ def yonetici_paneli():
                                         key=f"tip_{s['soru_no']}")
                     secenek = st.text_input("Seçenekler (virgülle ayırın, sadece seçmeli/skala için)",
                                              value=s.get("secenekler", ""), key=f"sec_{s['soru_no']}")
-                    guncelle = st.form_submit_button("Güncelle", type="primary")
+                    c1, c2 = st.columns(2)
+                    guncelle = c1.form_submit_button("Güncelle", type="primary", use_container_width=True)
+                    sil = c2.form_submit_button("🗑️ Soruyu Sil", use_container_width=True)
                 if guncelle:
                     api_cagir("save_question", soru_no=s["soru_no"], soru_metni=metin, cevap_tipi=tip, secenekler=secenek, aktif=True)
                     st.success("Soru güncellendi.")
+                    st.rerun()
+                if sil:
+                    api_cagir("delete_question", soru_no=s["soru_no"])
+                    st.success("Soru silindi.")
                     st.rerun()
 
         st.divider()

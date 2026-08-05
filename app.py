@@ -443,6 +443,15 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
                 except ValueError:
                     varsayilan = 0.0
                 cevap_girisleri[s["soru_no"]] = st.number_input(s["soru_metni"], value=varsayilan, key=f"{key_prefix}soru_{s['soru_no']}")
+            elif s["cevap_tipi"] == "yuzde":
+                try:
+                    varsayilan = float(onceki_deger) if onceki_deger else 0.0
+                except ValueError:
+                    varsayilan = 0.0
+                cevap_girisleri[s["soru_no"]] = st.number_input(
+                    f"{s['soru_metni']} (%)", value=varsayilan, min_value=0.0, max_value=500.0,
+                    step=0.1, format="%.1f", key=f"{key_prefix}soru_{s['soru_no']}"
+                )
             elif s["cevap_tipi"] in ("secmeli", "skala"):
                 secenekler = [x.strip() for x in (s.get("secenekler") or "").split(",") if x.strip()]
                 idx = secenekler.index(onceki_deger) if onceki_deger in secenekler else 0
@@ -785,6 +794,8 @@ def yonetici_paneli():
 
                     def tip_normalize(deger):
                         d = str(deger).strip().lower().replace("ı", "i")
+                        if "yuzde" in d or "%" in d:
+                            return "yuzde", ""
                         if "sayisal" in d or "sayı" in d.lower():
                             return "sayisal", ""
                         if "sozel" in d or "metin" in d:
@@ -829,8 +840,8 @@ def yonetici_paneli():
             with st.expander(f"Soru {s['soru_no']}: {s['soru_metni'][:50]}"):
                 with st.form(f"soru_duzenle_{s['soru_no']}"):
                     metin = st.text_input("Soru Metni", value=s["soru_metni"], key=f"metin_{s['soru_no']}")
-                    tip = st.selectbox("Cevap Tipi", ["metin", "sayisal", "secmeli", "skala"],
-                                        index=["metin", "sayisal", "secmeli", "skala"].index(s["cevap_tipi"]),
+                    tip = st.selectbox("Cevap Tipi", ["metin", "sayisal", "yuzde", "secmeli", "skala"],
+                                        index=["metin", "sayisal", "yuzde", "secmeli", "skala"].index(s["cevap_tipi"]),
                                         key=f"tip_{s['soru_no']}")
                     secenek = st.text_input("Seçenekler (virgülle ayırın, sadece seçmeli/skala için)",
                                              value=s.get("secenekler", ""), key=f"sec_{s['soru_no']}")
@@ -850,7 +861,7 @@ def yonetici_paneli():
         st.markdown("**Yeni Soru Ekle**")
         with st.form("yeni_soru_form"):
             yeni_metin = st.text_input("Soru Metni")
-            yeni_tip = st.selectbox("Cevap Tipi", ["metin", "sayisal", "secmeli", "skala"], key="yeni_tip")
+            yeni_tip = st.selectbox("Cevap Tipi", ["metin", "sayisal", "yuzde", "secmeli", "skala"], key="yeni_tip")
             yeni_secenek = st.text_input("Seçenekler (virgülle ayırın, örn: 1,2,3,4,5)", key="yeni_sec")
             soru_ekle = st.form_submit_button("Soru Ekle", type="primary")
         if soru_ekle and yeni_metin:

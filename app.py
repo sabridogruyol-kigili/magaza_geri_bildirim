@@ -492,6 +492,9 @@ def yonetici_paneli():
         kaynak = st.radio("Kimin ekranını görmek istersiniz?",
                            ["Kayıtlı bir kullanıcıyı seç", "Örnek/test kullanıcısı ile önizle"], horizontal=True)
 
+        if "onizleme_hedef" not in st.session_state:
+            st.session_state.onizleme_hedef = None
+
         if kaynak == "Kayıtlı bir kullanıcıyı seç":
             kullanicilar_res = api_get("get_users")
             kullanicilar = kullanicilar_res.get("kullanicilar", [])
@@ -499,17 +502,29 @@ def yonetici_paneli():
                 empty_state("👥", "Henüz kullanıcı tanımlanmadı. Önce 'Kullanıcı Ayarları' sekmesinden ekleyin.")
             else:
                 secilecekler = {f"{k['kullanici_adi']} — {k['magaza'] or 'Mağaza belirtilmemiş'}": k for k in kullanicilar}
-                secim = st.selectbox("Kullanıcı Seçin", list(secilecekler.keys()))
-                secili = secilecekler[secim]
-                st.divider()
+                secim = st.selectbox("Kullanıcı Seçin", list(secilecekler.keys()), key="onizleme_kullanici_sec")
+                if st.button("👁️ Bu Kullanıcının Ekranını Göster", type="primary"):
+                    st.session_state.onizleme_hedef = ("kullanici", secilecekler[secim])
+        else:
+            if st.button("👁️ Test Kullanıcısı Ekranını Göster", type="primary"):
+                st.session_state.onizleme_hedef = ("test", None)
+
+        if st.session_state.onizleme_hedef:
+            tur, secili = st.session_state.onizleme_hedef
+            if st.button("✖️ Önizlemeyi Kapat"):
+                st.session_state.onizleme_hedef = None
+                st.rerun()
+            st.divider()
+            if tur == "kullanici":
                 kullanici_paneli(kullanici_adi=secili["kullanici_adi"], ad_soyad=secili["ad_soyad"],
                                   bolge=secili["bolge"], magaza=secili["magaza"], magaza_kodu=secili.get("magaza_kodu"),
                                   onizleme=True, key_prefix="onizleme_")
+            else:
+                kullanici_paneli(kullanici_adi="TEST_ONIZLEME", ad_soyad="Test Kullanıcısı",
+                                  bolge="Test Bölge", magaza="Test Mağaza", magaza_kodu="TST01",
+                                  onizleme=True, key_prefix="onizleme_")
         else:
-            st.divider()
-            kullanici_paneli(kullanici_adi="TEST_ONIZLEME", ad_soyad="Test Kullanıcısı",
-                              bolge="Test Bölge", magaza="Test Mağaza", magaza_kodu="TST01",
-                              onizleme=True, key_prefix="onizleme_")
+            st.caption("Önizlemeyi başlatmak için yukarıdan seçim yapıp butona basın.")
 
     # --- KULLANICI AYARLARI ---
     with sekmeler[1]:

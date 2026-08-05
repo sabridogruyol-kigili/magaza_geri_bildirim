@@ -126,10 +126,19 @@ def get_user_agent():
 
 
 def donem_etiket(donem_adi):
-    yil, ay = donem_adi.split("-")
     aylar = ["", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
              "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
-    return f"{aylar[int(ay)]} {yil}"
+    try:
+        parcalar = str(donem_adi).split("-")
+        if len(parcalar) != 2:
+            return str(donem_adi)
+        yil, ay = parcalar
+        ay_no = int(ay)
+        if not (1 <= ay_no <= 12):
+            return str(donem_adi)
+        return f"{aylar[ay_no]} {yil}"
+    except (ValueError, IndexError):
+        return str(donem_adi)
 
 
 # ==================== OTURUM DURUMU ====================
@@ -691,12 +700,21 @@ def yonetici_paneli():
                 st.write("")
                 ekle = st.form_submit_button("Ekle", type="primary")
         if ekle and yeni_donem:
-            sonuc = api_cagir("create_period", donem_adi=yeni_donem)
-            if sonuc.get("success"):
-                st.success("Dönem eklendi.")
-                st.rerun()
+            yeni_donem_temiz = yeni_donem.strip()
+            gecerli = False
+            parcalar = yeni_donem_temiz.split("-")
+            if len(parcalar) == 2 and len(parcalar[0]) == 4 and parcalar[0].isdigit() and parcalar[1].isdigit():
+                if 1 <= int(parcalar[1]) <= 12:
+                    gecerli = True
+            if not gecerli:
+                st.error("Format hatalı. Lütfen **YYYY-AA** şeklinde girin (örn. 2026-09), ay 01 ile 12 arasında olmalı.")
             else:
-                st.error(sonuc.get("error"))
+                sonuc = api_cagir("create_period", donem_adi=yeni_donem_temiz)
+                if sonuc.get("success"):
+                    st.success("Dönem eklendi.")
+                    st.rerun()
+                else:
+                    st.error(sonuc.get("error"))
 
         donemler_res = api_get("get_periods")
         donemler = donemler_res.get("donemler", [])

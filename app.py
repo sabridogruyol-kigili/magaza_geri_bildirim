@@ -17,7 +17,7 @@ try:
     APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
     API_ANAHTARI = st.secrets["API_ANAHTARI"]
 except Exception:
-    APPS_SCRIPT_URL = "1KtpmaEGq9jXWx30Yqh95Pkow58zybBO5bKx6JEG9ssQ"
+    APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxS1WWlDieTqGvq35Pnr_30HPCuA1RLz3TkZDR1k-xGb6jSWNhHKHIKviXciMCUlOm2/exec"
     API_ANAHTARI = "kigili2026"
 
 UNVAN_LISTESI = [

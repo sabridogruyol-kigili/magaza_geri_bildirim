@@ -639,69 +639,63 @@ def yonetici_paneli():
             if not gosterilecekler:
                 empty_state("🔍", "Bu filtrelere uygun kullanıcı bulunamadı.")
             else:
-                gosterilen_kadilar = [k["kullanici_adi"] for k in gosterilecekler]
+                sirali = sorted(gosterilecekler, key=lambda x: (x["bolge"], x["magaza"]))
+                df_kullanici = pd.DataFrame([{
+                    "Sil": False,
+                    "Bölge": k["bolge"],
+                    "Mağaza": k["magaza"],
+                    "Mağaza Kodu": k.get("magaza_kodu", ""),
+                    "Kullanıcı Adı": k["kullanici_adi"],
+                    "Şifre": k["sifre"],
+                    "_orijinal_kullanici_adi": k["kullanici_adi"],
+                } for k in sirali])
 
-                def _tumunu_sec_callback():
-                    yeni_durum = st.session_state.get("tumunu_sec_kutu", False)
-                    for ka in gosterilen_kadilar:
-                        st.session_state[f"sec_{ka}"] = yeni_durum
+                st.caption("Hücrelere çift tıklayıp doğrudan düzenleyebilir, silmek için 'Sil' kutucuğunu işaretleyebilirsiniz.")
+                duzenlenmis = st.data_editor(
+                    df_kullanici,
+                    use_container_width=True,
+                    hide_index=True,
+                    key="kullanici_data_editor",
+                    column_order=["Sil", "Bölge", "Mağaza", "Mağaza Kodu", "Kullanıcı Adı", "Şifre"],
+                    column_config={
+                        "Sil": st.column_config.CheckboxColumn("Sil", width="small"),
+                    },
+                    disabled=["_orijinal_kullanici_adi"],
+                    num_rows="fixed",
+                )
 
-                st.checkbox(f"☑️ Tümünü Seç ({len(gosterilen_kadilar)} kullanıcı — mevcut filtreye göre)",
-                            key="tumunu_sec_kutu", on_change=_tumunu_sec_callback)
-
-                hc0, hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([0.5, 2, 2, 1.5, 2, 2, 1])
-                hc0.markdown("**Seç**")
-                hc1.markdown("**Bölge**")
-                hc2.markdown("**Mağaza**")
-                hc3.markdown("**Mağaza Kodu**")
-                hc4.markdown("**Kullanıcı Adı**")
-                hc5.markdown("**Şifre**")
-                hc6.markdown("**Sil**")
-
-                secilenler = []
-                for k in sorted(gosterilecekler, key=lambda x: (x["bolge"], x["magaza"])):
-                    c0, c1, c2, c3, c4, c5, c6 = st.columns([0.5, 2, 2, 1.5, 2, 2, 1])
-                    secildi = c0.checkbox("Seç", key=f"sec_{k['kullanici_adi']}", label_visibility="collapsed")
-                    if secildi:
-                        secilenler.append(k["kullanici_adi"])
-                    yeni_bolge = c1.text_input("Bölge", value=k["bolge"], key=f"kb_{k['kullanici_adi']}", label_visibility="collapsed")
-                    yeni_magaza = c2.text_input("Mağaza", value=k["magaza"], key=f"km_{k['kullanici_adi']}", label_visibility="collapsed")
-                    yeni_magaza_kodu = c3.text_input("Mağaza Kodu", value=k.get("magaza_kodu", ""), key=f"kmk_{k['kullanici_adi']}", label_visibility="collapsed")
-                    yeni_kadi = c4.text_input("Kullanıcı Adı", value=k["kullanici_adi"], key=f"kk_{k['kullanici_adi']}", label_visibility="collapsed")
-                    yeni_sifre = c5.text_input("Şifre", value=k["sifre"], key=f"ks_{k['kullanici_adi']}", label_visibility="collapsed")
-
-                    degisti = (yeni_bolge != k["bolge"] or yeni_magaza != k["magaza"] or
-                               yeni_magaza_kodu != k.get("magaza_kodu", "") or
-                               yeni_kadi != k["kullanici_adi"] or yeni_sifre != k["sifre"])
-                    if degisti:
-                        if c6.button("💾", key=f"kaydet_{k['kullanici_adi']}", help="Değişikliği kaydet"):
-                            sonuc = api_cagir("save_user", orijinal_kullanici_adi=k["kullanici_adi"],
-                                               kullanici_adi=yeni_kadi, sifre=yeni_sifre,
-                                               ad_soyad=yeni_magaza or yeni_kadi, bolge=yeni_bolge, magaza=yeni_magaza,
-                                               magaza_kodu=yeni_magaza_kodu)
-                            if sonuc.get("success"):
-                                st.success(f"'{yeni_kadi}' güncellendi.")
-                                st.rerun()
-                            else:
-                                st.error(sonuc.get("error", "Güncellenemedi."))
+                bc1, bc2 = st.columns(2)
+                if bc1.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
+                    degisen_sayisi = 0
+                    for i in range(len(df_kullanici)):
+                        orijinal = df_kullanici.iloc[i]
+                        yeni = duzenlenmis.iloc[i]
+                        alanlar = ["Bölge", "Mağaza", "Mağaza Kodu", "Kullanıcı Adı", "Şifre"]
+                        if any(str(orijinal[a]) != str(yeni[a]) for a in alanlar):
+                            api_cagir("save_user", orijinal_kullanici_adi=orijinal["_orijinal_kullanici_adi"],
+                                      kullanici_adi=yeni["Kullanıcı Adı"], sifre=yeni["Şifre"],
+                                      ad_soyad=yeni["Mağaza"] or yeni["Kullanıcı Adı"],
+                                      bolge=yeni["Bölge"], magaza=yeni["Mağaza"], magaza_kodu=yeni["Mağaza Kodu"])
+                            degisen_sayisi += 1
+                    if degisen_sayisi:
+                        st.success(f"{degisen_sayisi} kullanıcı güncellendi.")
+                        st.rerun()
                     else:
-                        if c6.button("🗑️", key=f"sil_{k['kullanici_adi']}", help="Bu kullanıcıyı sil"):
-                            api_cagir("delete_user", kullanici_adi=k["kullanici_adi"])
-                            st.rerun()
+                        st.info("Değişiklik yapılmadı.")
 
-                st.divider()
-                if secilenler:
-                    st.warning(f"⚠️ {len(secilenler)} kullanıcı seçili: {', '.join(secilenler[:8])}{' ...' if len(secilenler) > 8 else ''}")
-                    onay = st.checkbox(f"Bu {len(secilenler)} kullanıcıyı kalıcı olarak silmek istediğimi onaylıyorum", key="toplu_sil_onay")
-                    if st.button(f"🗑️ Seçilenleri Sil ({len(secilenler)})", type="primary", disabled=not onay):
-                        sonuc = api_cagir("delete_users_toplu", kullanici_adilari=secilenler)
-                        if sonuc.get("success"):
-                            st.success(f"{sonuc.get('silinen', 0)} kullanıcı silindi.")
-                            st.rerun()
-                        else:
-                            st.error(sonuc.get("error", "Silinemedi."))
+                silinecekler = duzenlenmis[duzenlenmis["Sil"] == True]["_orijinal_kullanici_adi"].tolist()
+                if silinecekler:
+                    st.warning(f"⚠️ Silinmek üzere işaretlenen {len(silinecekler)} kullanıcı: {', '.join(silinecekler[:8])}{' ...' if len(silinecekler) > 8 else ''}")
+                    onay = st.checkbox(f"Bu {len(silinecekler)} kullanıcıyı kalıcı olarak silmek istediğimi onaylıyorum", key="toplu_sil_onay")
                 else:
-                    st.caption("Toplu silmek için yukarıdan kullanıcı satırlarını seçin.")
+                    onay = False
+                if bc2.button(f"🗑️ İşaretlenenleri Sil ({len(silinecekler)})", use_container_width=True, disabled=not (silinecekler and onay)):
+                    sonuc = api_cagir("delete_users_toplu", kullanici_adilari=silinecekler)
+                    if sonuc.get("success"):
+                        st.success(f"{sonuc.get('silinen', 0)} kullanıcı silindi.")
+                        st.rerun()
+                    else:
+                        st.error(sonuc.get("error", "Silinemedi."))
 
     # --- DÖNEMLER ---
     with sekmeler[2]:

@@ -250,13 +250,19 @@ def donem_etiket(donem_adi):
              "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
     try:
         parcalar = str(donem_adi).split("-")
-        if len(parcalar) != 2:
-            return str(donem_adi)
-        yil, ay = parcalar
-        ay_no = int(ay)
-        if not (1 <= ay_no <= 12):
-            return str(donem_adi)
-        return f"{aylar[ay_no]} {yil}"
+        if len(parcalar) == 3:
+            yil, ay, hafta = parcalar
+            ay_no = int(ay)
+            if not (1 <= ay_no <= 12):
+                return str(donem_adi)
+            return f"{aylar[ay_no]} {yil} - {int(hafta)}. Hafta"
+        if len(parcalar) == 2:
+            yil, ay = parcalar
+            ay_no = int(ay)
+            if not (1 <= ay_no <= 12):
+                return str(donem_adi)
+            return f"{aylar[ay_no]} {yil}"
+        return str(donem_adi)
     except (ValueError, IndexError):
         return str(donem_adi)
 
@@ -841,30 +847,31 @@ def yonetici_paneli():
     # --- DÖNEMLER ---
     with sekmeler[2]:
         st.markdown("##### Dönem Yönetimi")
+        st.caption("Dönemler artık haftalık: Yıl / Ay / Hafta seçip ekleyin (format: YYYY-AA-H).")
         with st.form("yeni_donem_form"):
-            c1, c2 = st.columns([3, 1])
+            c1, c2, c3, c4 = st.columns([1.3, 1.5, 1, 1])
+            simdiki_yil = datetime.now().year
             with c1:
-                yeni_donem = st.text_input("Yeni Dönem (YYYY-AA formatında, örn. 2026-09)")
+                yeni_yil = st.selectbox("Yıl", list(range(simdiki_yil - 1, simdiki_yil + 3)), index=1)
             with c2:
+                AY_ADLARI = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+                             "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+                yeni_ay_adi = st.selectbox("Ay", AY_ADLARI, index=datetime.now().month - 1)
+                yeni_ay = AY_ADLARI.index(yeni_ay_adi) + 1
+            with c3:
+                yeni_hafta = st.selectbox("Hafta", [1, 2, 3, 4, 5])
+            with c4:
                 st.write("")
                 st.write("")
-                ekle = st.form_submit_button("Ekle", type="primary")
-        if ekle and yeni_donem:
-            yeni_donem_temiz = yeni_donem.strip()
-            gecerli = False
-            parcalar = yeni_donem_temiz.split("-")
-            if len(parcalar) == 2 and len(parcalar[0]) == 4 and parcalar[0].isdigit() and parcalar[1].isdigit():
-                if 1 <= int(parcalar[1]) <= 12:
-                    gecerli = True
-            if not gecerli:
-                st.error("Format hatalı. Lütfen **YYYY-AA** şeklinde girin (örn. 2026-09), ay 01 ile 12 arasında olmalı.")
+                ekle = st.form_submit_button("Ekle", type="primary", use_container_width=True)
+        if ekle:
+            yeni_donem_temiz = f"{yeni_yil}-{yeni_ay:02d}-{yeni_hafta}"
+            sonuc = api_cagir("create_period", donem_adi=yeni_donem_temiz)
+            if sonuc.get("success"):
+                st.success(f"Dönem eklendi: {donem_etiket(yeni_donem_temiz)} ({yeni_donem_temiz})")
+                st.rerun()
             else:
-                sonuc = api_cagir("create_period", donem_adi=yeni_donem_temiz)
-                if sonuc.get("success"):
-                    st.success("Dönem eklendi.")
-                    st.rerun()
-                else:
-                    st.error(sonuc.get("error"))
+                st.error(sonuc.get("error"))
 
         donemler_res = api_get("get_periods")
         donemler = donemler_res.get("donemler", [])

@@ -17,8 +17,8 @@ try:
     APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
     API_ANAHTARI = st.secrets["API_ANAHTARI"]
 except Exception:
-    APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxS1WWlDieTqGvq35Pnr_30HPCuA1RLz3TkZDR1k-xGb6jSWNhHKHIKviXciMCUlOm2/exec"
-    API_ANAHTARI = "kigili2026"
+    APPS_SCRIPT_URL = "BURAYA_APPS_SCRIPT_WEB_APP_URL_YAPISTIRIN"
+    API_ANAHTARI = "BURAYA_UZUN_RASTGELE_BIR_ANAHTAR_YAZIN"
 
 UNVAN_LISTESI = [
     "Mağaza Müdür Yardımcısı", "Satış Şefi", "Satış Danışmanı",

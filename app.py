@@ -1032,6 +1032,66 @@ def yonetici_paneli():
             else:
                 empty_state("📊", "Seçilen filtrelere uygun kayıt bulunamadı.")
 
+        st.divider()
+        st.markdown("##### Aylık Özet (1 / 0)")
+        st.caption("Seçtiğiniz ayda mağazaya kaç dönem (hafta) atandıysa, HEPSİNİ tamamladıysa 1, en az birini eksik bıraktıysa 0 verir.")
+
+        # Dönemleri ay bazında grupla (YYYY-AA-H -> YYYY-AA)
+        tum_donemler_ay = {}
+        for d in donemler_res.get("donemler", []):
+            parcalar = d["donem_adi"].split("-")
+            ay_anahtari = f"{parcalar[0]}-{parcalar[1]}" if len(parcalar) >= 2 else d["donem_adi"]
+            tum_donemler_ay.setdefault(ay_anahtari, []).append(d["donem_adi"])
+
+        if not tum_donemler_ay:
+            empty_state("🗓️", "Henüz hiç dönem tanımlanmadı.")
+        else:
+            ay_secenekleri = sorted(tum_donemler_ay.keys(), reverse=True)
+            secilen_ay = st.selectbox("Ay Seçin", ay_secenekleri, format_func=donem_etiket, key="aylik_ozet_ay")
+            donemler_bu_ay = tum_donemler_ay[secilen_ay]
+            st.caption(f"Bu ayda toplam {len(donemler_bu_ay)} dönem (hafta) var: {', '.join(donem_etiket(d) for d in sorted(donemler_bu_ay))}")
+
+            if st.button("📊 Aylık Özeti Oluştur", type="primary"):
+                ozet_res = api_get("get_fill_status", donemler=donemler_bu_ay)
+                ozet_durumlar = ozet_res.get("durumlar", [])
+
+                # Mağaza adını eşlemek için kullanıcı listesini çekiyoruz
+                kullanicilar_liste = api_get("get_users").get("kullanicilar", [])
+                magaza_haritasi = {k["kullanici_adi"]: k.get("magaza", "") for k in kullanicilar_liste}
+
+                kullanici_gruplari = {}
+                for d in ozet_durumlar:
+                    kullanici_gruplari.setdefault(d["kullanici_adi"], {"ad_soyad": d.get("ad_soyad", ""), "kayitlar": []})
+                    kullanici_gruplari[d["kullanici_adi"]]["kayitlar"].append(d)
+
+                ozet_satirlari = []
+                for kadi, bilgi in kullanici_gruplari.items():
+                    kayitlar = bilgi["kayitlar"]
+                    tamamlanan = sum(1 for k in kayitlar if k["durum"] == "tamamlandi")
+                    atanan = len(kayitlar)
+                    sonuc_degeri = 1 if (atanan > 0 and tamamlanan == atanan) else 0
+                    oran = round((tamamlanan / atanan) * 100, 1) if atanan > 0 else 0.0
+                    ozet_satirlari.append({
+                        "Mağaza": magaza_haritasi.get(kadi, "") or bilgi["ad_soyad"] or kadi,
+                        "Sonuç (1=Tamamladı, 0=Eksik)": sonuc_degeri,
+                        "Kaç Hafta Verildi": atanan,
+                        "Kaç Hafta Yaptı": tamamlanan,
+                        "Gerçekleştirme Oranı (%)": oran,
+                    })
+
+                df_ozet = pd.DataFrame(ozet_satirlari).sort_values(["Sonuç (1=Tamamladı, 0=Eksik)", "Mağaza"])
+                st.dataframe(df_ozet, use_container_width=True, hide_index=True)
+
+                tamamlayan_sayisi = int(df_ozet["Sonuç (1=Tamamladı, 0=Eksik)"].sum()) if not df_ozet.empty else 0
+                st.caption(f"{tamamlayan_sayisi} / {len(df_ozet)} mağaza bu ayın tüm dönemlerini tamamladı.")
+
+                buf_ozet = BytesIO()
+                with pd.ExcelWriter(buf_ozet, engine="openpyxl") as writer:
+                    df_ozet.to_excel(writer, index=False, sheet_name="Aylık Özet")
+                st.download_button("📥 Aylık Özeti Excel Olarak İndir", data=buf_ozet.getvalue(),
+                                    file_name=f"aylik_ozet_{secilen_ay}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     # --- EXCEL İNDİR ---
     with sekmeler[5]:
         st.markdown("##### Excel Raporu İndir")

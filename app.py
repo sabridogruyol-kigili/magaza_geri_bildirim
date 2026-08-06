@@ -526,7 +526,16 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
     st.markdown("##### İlerleme Durumu")
     girilen = len(personeller)
     st.progress(min(girilen / yeni_beyan, 1.0) if yeni_beyan else 0)
-    st.caption(f"{girilen} / {yeni_beyan} personel girildi")
+
+    if yeni_beyan and girilen >= yeni_beyan:
+        st.success(f"✅ Tamamlandı! {girilen} / {yeni_beyan} personel girildi.")
+    else:
+        st.caption(f"{girilen} / {yeni_beyan} personel girildi")
+
+    if personeller:
+        st.markdown("**Girilen Personel Listesi**")
+        df = pd.DataFrame([{"Sicil No": p["sicil_no"], "Ad Soyad": p["personel_ad_soyad"], "Unvan": p["unvan"]} for p in personeller])
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.divider()
     st.markdown('<span class="pill">3. ADIM</span>', unsafe_allow_html=True)
@@ -611,12 +620,6 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
                 st.rerun()
             else:
                 st.error(sonuc.get("error", "Kayıt sırasında hata oluştu."))
-
-    if personeller:
-        st.divider()
-        st.markdown("##### Girilen Personel Listesi")
-        df = pd.DataFrame([{"Sicil No": p["sicil_no"], "Ad Soyad": p["personel_ad_soyad"], "Unvan": p["unvan"]} for p in personeller])
-        st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 # ==================== YÖNETİCİ PANELİ ====================

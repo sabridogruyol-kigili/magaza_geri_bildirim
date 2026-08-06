@@ -490,20 +490,21 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
         _basari_animasyonu()
         st.session_state[basari_anahtari] = None
 
-    donemler_res = api_get("get_periods")
-    if not donemler_res.get("success"):
-        st.error("Dönemler alınamadı.")
+    bootstrap = api_get("get_kullanici_bootstrap", kullanici_adi=ka)
+    if not bootstrap.get("success"):
+        st.error("Veriler alınamadı.")
         return
-    aktif_donemler = [d["donem_adi"] for d in donemler_res["donemler"] if d["aktif"]]
+    aktif_donemler = [d["donem_adi"] for d in bootstrap["donemler"] if d["aktif"]]
     if not aktif_donemler:
         empty_state("🗓️", "Şu anda aktif bir değerlendirme dönemi bulunmuyor. Yönetici tarafından bir dönem açıldığında burada görünecektir.")
         return
 
     donem = st.selectbox("Dönem Seçin", aktif_donemler, format_func=donem_etiket, key=f"{key_prefix}donem_sec")
 
-    # --- Beyan sayısı ---
-    beyan_res = api_get("get_declaration", kullanici_adi=ka, donem=donem)
-    mevcut_beyan = beyan_res.get("beyan_sayisi", 0)
+    # Bootstrap içinden bu döneme ait veriyi ayıkla (ekstra istek atmadan)
+    donem_verisi = bootstrap.get("veriler", {}).get(donem, {"beyan_sayisi": 0, "personeller": []})
+    mevcut_beyan = donem_verisi.get("beyan_sayisi", 0)
+    sorular = bootstrap.get("sorular", [])
 
     st.markdown('<span class="pill">1. ADIM</span>', unsafe_allow_html=True)
     st.markdown("##### Çalışan Sayınızı Girin")
@@ -519,8 +520,7 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
             st.rerun()
 
     # --- Mevcut kayıtlar ---
-    kayit_res = api_get("get_records", kullanici_adi=ka, donem=donem)
-    personeller = kayit_res.get("personeller", [])
+    personeller = donem_verisi.get("personeller", [])
 
     st.markdown('<span class="pill">2. ADIM</span>', unsafe_allow_html=True)
     st.markdown("##### İlerleme Durumu")
@@ -541,8 +541,6 @@ def kullanici_paneli(kullanici_adi=None, ad_soyad=None, bolge=None, magaza=None,
     st.markdown('<span class="pill">3. ADIM</span>', unsafe_allow_html=True)
     st.markdown("##### Personel Ekle / Düzenle")
 
-    sorular_res = api_get("get_questions")
-    sorular = sorular_res.get("sorular", [])
     if not sorular:
         empty_state("❓", "Henüz soru tanımlanmamış. Yöneticinizle iletişime geçin.")
         return

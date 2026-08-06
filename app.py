@@ -1055,10 +1055,28 @@ def yonetici_paneli():
                 ozet_res = api_get("get_fill_status", donemler=donemler_bu_ay)
                 ozet_durumlar = ozet_res.get("durumlar", [])
 
-                # Mağaza adını eşlemek için kullanıcı listesini çekiyoruz
+                # Mağaza adı + kodunu eşlemek için kullanıcı listesini çekiyoruz
                 kullanicilar_liste = api_get("get_users").get("kullanicilar", [])
-                magaza_haritasi = {k["kullanici_adi"]: k.get("magaza", "") for k in kullanicilar_liste}
+                magaza_haritasi = {}
+                for k in kullanicilar_liste:
+                    ad = k.get("magaza", "") or k.get("ad_soyad", "") or k["kullanici_adi"]
+                    kod = k.get("magaza_kodu", "")
+                    magaza_haritasi[k["kullanici_adi"]] = f"{kod} - {ad}" if kod else ad
 
+                # --- Sayfa 1: Haftalık Detay (bu ayın tüm dönemleri, dönem bazında) ---
+                detay_satirlari = []
+                for d in ozet_durumlar:
+                    etiketler = {"tamamlandi": "✅ Tamamlandı", "kismen": "🟡 Kısmen", "doldurmadi": "🔴 Doldurmadı"}
+                    detay_satirlari.append({
+                        "Mağaza": magaza_haritasi.get(d["kullanici_adi"], d.get("ad_soyad", d["kullanici_adi"])),
+                        "Dönem (Hafta)": donem_etiket(d["donem"]),
+                        "Beyan Edilen": d.get("beyan_sayisi", 0),
+                        "Girilen": d.get("girilen_sayi", 0),
+                        "Durum": etiketler.get(d["durum"], d["durum"]),
+                    })
+                df_detay = pd.DataFrame(detay_satirlari)
+
+                # --- Sayfa 2: Sonuç Raporu (aylık, mağaza bazında tek satır) ---
                 kullanici_gruplari = {}
                 for d in ozet_durumlar:
                     kullanici_gruplari.setdefault(d["kullanici_adi"], {"ad_soyad": d.get("ad_soyad", ""), "kayitlar": []})
@@ -1072,7 +1090,7 @@ def yonetici_paneli():
                     sonuc_degeri = 1 if (atanan > 0 and tamamlanan == atanan) else 0
                     oran = round((tamamlanan / atanan) * 100, 1) if atanan > 0 else 0.0
                     ozet_satirlari.append({
-                        "Mağaza": magaza_haritasi.get(kadi, "") or bilgi["ad_soyad"] or kadi,
+                        "Mağaza": magaza_haritasi.get(kadi, bilgi["ad_soyad"] or kadi),
                         "Sonuç (1=Tamamladı, 0=Eksik)": sonuc_degeri,
                         "Kaç Hafta Verildi": atanan,
                         "Kaç Hafta Yaptı": tamamlanan,
@@ -1087,7 +1105,8 @@ def yonetici_paneli():
 
                 buf_ozet = BytesIO()
                 with pd.ExcelWriter(buf_ozet, engine="openpyxl") as writer:
-                    df_ozet.to_excel(writer, index=False, sheet_name="Aylık Özet")
+                    df_detay.to_excel(writer, index=False, sheet_name="Haftalık Detay")
+                    df_ozet.to_excel(writer, index=False, sheet_name="Sonuç Raporu")
                 st.download_button("📥 Aylık Özeti Excel Olarak İndir", data=buf_ozet.getvalue(),
                                     file_name=f"aylik_ozet_{secilen_ay}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
